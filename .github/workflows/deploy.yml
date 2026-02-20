@@ -1,0 +1,35 @@
+name: Deploy to WordPress.com
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  wpcom-sync:
+    name: Sync plugin to WordPress.com
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate deployment metadata
+        run: |
+          test -d .wordpress-com
+          echo "WordPress.com deployment metadata detected."
+
+      - name: Trigger WordPress.com sync
+        env:
+          WPCOM_DEPLOY_WEBHOOK_URL: ${{ secrets.WPCOM_DEPLOY_WEBHOOK_URL }}
+        run: |
+          if [ -z "$WPCOM_DEPLOY_WEBHOOK_URL" ]; then
+            echo "WPCOM_DEPLOY_WEBHOOK_URL secret is not set." >&2
+            exit 1
+          fi
+
+          curl --fail --show-error --silent \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"ref":"main","repository":"rt-gate"}' \
+            "$WPCOM_DEPLOY_WEBHOOK_URL"
