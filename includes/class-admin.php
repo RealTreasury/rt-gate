@@ -672,21 +672,22 @@ class RTG_Admin {
 							return;
 						}
 
-						event.preventDefault();
-
 						if (event.target.classList.contains('rtg-remove-row')) {
+							event.preventDefault();
 							row.remove();
 							setStatus('Field removed.');
 							return;
 						}
 
 						if (event.target.classList.contains('rtg-move-up') && row.previousElementSibling) {
+							event.preventDefault();
 							rowsContainer.insertBefore(row, row.previousElementSibling);
 							setStatus('Field moved up.');
 							return;
 						}
 
 						if (event.target.classList.contains('rtg-move-down') && row.nextElementSibling) {
+							event.preventDefault();
 							rowsContainer.insertBefore(row.nextElementSibling, row);
 							setStatus('Field moved down.');
 						}
