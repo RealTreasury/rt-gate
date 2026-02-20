@@ -63,6 +63,15 @@ Editable fields:
 - `type`
 - `config` (JSON-as-text)
 
+Additional helper input:
+- `asset_url` (optional)
+  - Supports selecting from WordPress Media Library using **Choose from Media Library**.
+  - On save, this URL is merged into `config` by asset type:
+    - `download` → `file_url`
+    - `video` → `embed_url`
+    - `link` → `target_url`
+
+
 Handler path:
 - POST `rtg_action=save_asset`
 - Nonce action: `rtg_save_asset`

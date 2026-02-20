@@ -11,6 +11,30 @@ class RTG_Admin {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_admin_menu' ) );
 		add_action( 'admin_init', array( __CLASS__, 'handle_form_actions' ) );
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_admin_assets' ) );
+	}
+
+	/**
+	 * Enqueue admin scripts for plugin pages.
+	 *
+	 * @param string $hook_suffix The current admin page hook.
+	 * @return void
+	 */
+	public static function enqueue_admin_assets( $hook_suffix ) {
+		if ( 'real-treasury-gate_page_rtg-assets' !== $hook_suffix ) {
+			return;
+		}
+
+		wp_enqueue_media();
+		$script_path = RTG_PLUGIN_DIR . 'assets/js/admin-assets.js';
+
+		wp_enqueue_script(
+			'rtg-admin-assets',
+			RTG_PLUGIN_URL . 'assets/js/admin-assets.js',
+			array( 'jquery' ),
+			file_exists( $script_path ) ? (string) filemtime( $script_path ) : null,
+			true
+		);
 	}
 
 	/**
@@ -131,11 +155,19 @@ class RTG_Admin {
 		$table = $wpdb->prefix . 'rtg_assets';
 		$id    = isset( $_POST['id'] ) ? absint( wp_unslash( $_POST['id'] ) ) : 0;
 
+		$asset_type = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : '';
+		$config     = isset( $_POST['config'] ) ? sanitize_textarea_field( wp_unslash( $_POST['config'] ) ) : '';
+		$asset_url  = isset( $_POST['asset_url'] ) ? esc_url_raw( wp_unslash( $_POST['asset_url'] ) ) : '';
+
+		if ( ! empty( $asset_url ) ) {
+			$config = self::merge_asset_url_into_config( $config, $asset_type, $asset_url );
+		}
+
 		$data = array(
 			'name'   => isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '',
 			'slug'   => isset( $_POST['slug'] ) ? sanitize_text_field( wp_unslash( $_POST['slug'] ) ) : '',
-			'type'   => isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : '',
-			'config' => isset( $_POST['config'] ) ? sanitize_text_field( wp_unslash( $_POST['config'] ) ) : '',
+			'type'   => $asset_type,
+			'config' => $config,
 		);
 
 		if ( $id > 0 ) {
@@ -146,6 +178,39 @@ class RTG_Admin {
 
 		wp_safe_redirect( admin_url( 'admin.php?page=rtg-assets&rtg_notice=' . rawurlencode( 'Asset saved.' ) ) );
 		exit;
+	}
+
+	/**
+	 * Merge a simple asset URL into the JSON config based on asset type.
+	 *
+	 * @param string $config_json Existing config JSON.
+	 * @param string $asset_type  Asset type.
+	 * @param string $asset_url   Asset URL selected in admin.
+	 * @return string
+	 */
+	private static function merge_asset_url_into_config( $config_json, $asset_type, $asset_url ) {
+		$config = array();
+
+		if ( ! empty( $config_json ) ) {
+			$decoded = json_decode( $config_json, true );
+			if ( is_array( $decoded ) ) {
+				$config = $decoded;
+			}
+		}
+
+		switch ( $asset_type ) {
+			case 'download':
+				$config['file_url'] = $asset_url;
+				break;
+			case 'video':
+				$config['embed_url'] = $asset_url;
+				break;
+			case 'link':
+				$config['target_url'] = $asset_url;
+				break;
+		}
+
+		return wp_json_encode( $config );
 	}
 
 	/**
@@ -189,7 +254,8 @@ class RTG_Admin {
 		$table   = $wpdb->prefix . 'rtg_forms';
 		$forms   = $wpdb->get_results( "SELECT id, name, created_at FROM {$table} ORDER BY id DESC" );
 		$edit_id = isset( $_GET['edit_id'] ) ? absint( wp_unslash( $_GET['edit_id'] ) ) : 0;
-		$record  = null;
+		$record    = null;
+		$asset_url = '';
 
 		if ( $edit_id > 0 ) {
 			$record = $wpdb->get_row( $wpdb->prepare( "SELECT id, name, fields_schema, consent_text FROM {$table} WHERE id = %d", $edit_id ) );
@@ -263,11 +329,25 @@ class RTG_Admin {
 		global $wpdb;
 		$table   = $wpdb->prefix . 'rtg_assets';
 		$assets  = $wpdb->get_results( "SELECT id, name, slug, type, created_at FROM {$table} ORDER BY id DESC" );
-		$edit_id = isset( $_GET['edit_id'] ) ? absint( wp_unslash( $_GET['edit_id'] ) ) : 0;
-		$record  = null;
+		$edit_id   = isset( $_GET['edit_id'] ) ? absint( wp_unslash( $_GET['edit_id'] ) ) : 0;
+		$record    = null;
+		$asset_url = '';
 
 		if ( $edit_id > 0 ) {
 			$record = $wpdb->get_row( $wpdb->prepare( "SELECT id, name, slug, type, config FROM {$table} WHERE id = %d", $edit_id ) );
+
+			if ( $record && ! empty( $record->config ) ) {
+				$config = json_decode( $record->config, true );
+				if ( is_array( $config ) ) {
+					if ( 'download' === $record->type && ! empty( $config['file_url'] ) ) {
+						$asset_url = $config['file_url'];
+					} elseif ( 'video' === $record->type && ! empty( $config['embed_url'] ) ) {
+						$asset_url = $config['embed_url'];
+					} elseif ( 'link' === $record->type && ! empty( $config['target_url'] ) ) {
+						$asset_url = $config['target_url'];
+					}
+				}
+			}
 		}
 
 		$nonce = wp_create_nonce( 'rtg_save_asset' );
@@ -300,6 +380,16 @@ class RTG_Admin {
 									<option value="<?php echo esc_attr( $type ); ?>" <?php selected( $current_type, $type ); ?>><?php echo esc_html( ucfirst( $type ) ); ?></option>
 								<?php endforeach; ?>
 							</select>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="rtg_asset_url"><?php echo esc_html__( 'Asset URL', 'rt-gate' ); ?></label></th>
+						<td>
+							<input id="rtg_asset_url" name="asset_url" type="url" class="large-text" value="<?php echo esc_attr( $asset_url ); ?>" placeholder="https://" />
+							<p>
+								<button type="button" class="button" id="rtg_select_media"><?php echo esc_html__( 'Choose from Media Library', 'rt-gate' ); ?></button>
+							</p>
+							<p class="description"><?php echo esc_html__( 'Optional helper: selecting a URL here auto-populates config as file_url (download), embed_url (video), or target_url (link).', 'rt-gate' ); ?></p>
 						</td>
 					</tr>
 					<tr>
