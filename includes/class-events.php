@@ -255,71 +255,77 @@ class RTG_Events {
 	}
 }
 
-/**
- * Events list table.
- */
-class RTG_Events_List_Table extends WP_List_Table {
+if ( is_admin() ) {
+	require_once ABSPATH . 'wp-admin/includes/class-wp-list-table.php';
+}
+
+if ( class_exists( 'WP_List_Table' ) ) {
 	/**
-	 * Get columns.
-	 *
-	 * @return array
+	 * Events list table.
 	 */
-	public function get_columns() {
-		return array(
-			'id'         => esc_html__( 'ID', 'rt-gate' ),
-			'email'      => esc_html__( 'Email', 'rt-gate' ),
-			'form_id'    => esc_html__( 'Form', 'rt-gate' ),
-			'asset_id'   => esc_html__( 'Asset', 'rt-gate' ),
-			'event_type' => esc_html__( 'Event Type', 'rt-gate' ),
-			'meta'       => esc_html__( 'Meta', 'rt-gate' ),
-			'created_at' => esc_html__( 'Created', 'rt-gate' ),
-		);
-	}
-
-	/**
-	 * Prepare table items.
-	 *
-	 * @return void
-	 */
-	public function prepare_items() {
-		$per_page     = 20;
-		$current_page = $this->get_pagenum();
-		$offset       = ( $current_page - 1 ) * $per_page;
-
-		$this->items = RTG_Events::query_events( $per_page, $offset );
-		$total_items = RTG_Events::count_events();
-
-		$this->set_pagination_args(
-			array(
-				'total_items' => $total_items,
-				'per_page'    => $per_page,
-			)
-		);
-	}
-
-	/**
-	 * Render default columns.
-	 *
-	 * @param array  $item Item data.
-	 * @param string $column_name Column key.
-	 * @return string
-	 */
-	public function column_default( $item, $column_name ) {
-		switch ( $column_name ) {
-			case 'id':
-			case 'form_id':
-			case 'asset_id':
-				return (string) absint( $item->$column_name );
-			case 'email':
-			case 'event_type':
-				return esc_html( (string) $item->$column_name );
-			case 'meta':
-				return esc_html( wp_json_encode( json_decode( (string) $item->meta, true ) ) );
-			case 'created_at':
-				return esc_html( (string) $item->created_at );
+	class RTG_Events_List_Table extends WP_List_Table {
+		/**
+		 * Get columns.
+		 *
+		 * @return array
+		 */
+		public function get_columns() {
+			return array(
+				'id'         => esc_html__( 'ID', 'rt-gate' ),
+				'email'      => esc_html__( 'Email', 'rt-gate' ),
+				'form_id'    => esc_html__( 'Form', 'rt-gate' ),
+				'asset_id'   => esc_html__( 'Asset', 'rt-gate' ),
+				'event_type' => esc_html__( 'Event Type', 'rt-gate' ),
+				'meta'       => esc_html__( 'Meta', 'rt-gate' ),
+				'created_at' => esc_html__( 'Created', 'rt-gate' ),
+			);
 		}
 
-		return '';
+		/**
+		 * Prepare table items.
+		 *
+		 * @return void
+		 */
+		public function prepare_items() {
+			$per_page     = 20;
+			$current_page = $this->get_pagenum();
+			$offset       = ( $current_page - 1 ) * $per_page;
+
+			$this->items = RTG_Events::query_events( $per_page, $offset );
+			$total_items = RTG_Events::count_events();
+
+			$this->set_pagination_args(
+				array(
+					'total_items' => $total_items,
+					'per_page'    => $per_page,
+				)
+			);
+		}
+
+		/**
+		 * Render default columns.
+		 *
+		 * @param array  $item Item data.
+		 * @param string $column_name Column key.
+		 * @return string
+		 */
+		public function column_default( $item, $column_name ) {
+			switch ( $column_name ) {
+				case 'id':
+				case 'form_id':
+				case 'asset_id':
+					return (string) absint( $item->$column_name );
+				case 'email':
+				case 'event_type':
+					return esc_html( (string) $item->$column_name );
+				case 'meta':
+					return esc_html( wp_json_encode( json_decode( (string) $item->meta, true ) ) );
+				case 'created_at':
+					return esc_html( (string) $item->created_at );
+			}
+
+			return '';
+		}
 	}
 }
 
