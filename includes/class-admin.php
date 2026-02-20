@@ -297,8 +297,32 @@ class RTG_Admin {
 
 				.rtg-form-builder-actions {
 					display: flex;
+					flex-wrap: wrap;
 					gap: 8px;
 					margin-top: 10px;
+				}
+
+				.rtg-form-builder-presets {
+					display: flex;
+					flex-wrap: wrap;
+					gap: 8px;
+					margin-bottom: 10px;
+				}
+
+				.rtg-form-builder-presets select {
+					min-width: 220px;
+				}
+
+				.rtg-builder-status {
+					margin-top: 10px;
+					font-style: italic;
+				}
+
+				.rtg-f-extra-help {
+					display: block;
+					margin-top: 4px;
+					color: #646970;
+					font-size: 12px;
 				}
 
 				.rtg-helper-list {
@@ -351,7 +375,19 @@ class RTG_Admin {
 
 					<div class="rtg-card">
 						<h3><?php echo esc_html__( 'Field Builder', 'rt-gate' ); ?></h3>
-						<p><?php echo esc_html__( 'Add fields below, then generate the schema automatically.', 'rt-gate' ); ?></p>
+						<p><?php echo esc_html__( 'Add fields below, use templates for common forms, then generate the schema automatically.', 'rt-gate' ); ?></p>
+						<div class="rtg-form-builder-presets">
+							<select id="rtg_form_template_select">
+								<option value=""><?php echo esc_html__( 'Choose a form template…', 'rt-gate' ); ?></option>
+								<option value="lead_gen"><?php echo esc_html__( 'Lead capture (name, company, role)', 'rt-gate' ); ?></option>
+								<option value="webinar"><?php echo esc_html__( 'Webinar registration', 'rt-gate' ); ?></option>
+								<option value="download"><?php echo esc_html__( 'Download request', 'rt-gate' ); ?></option>
+							</select>
+							<button type="button" class="button" id="rtg_insert_template"><?php echo esc_html__( 'Insert Template', 'rt-gate' ); ?></button>
+							<button type="button" class="button" id="rtg_add_email_field"><?php echo esc_html__( 'Quick Add Email', 'rt-gate' ); ?></button>
+							<button type="button" class="button" id="rtg_add_name_field"><?php echo esc_html__( 'Quick Add Name', 'rt-gate' ); ?></button>
+							<button type="button" class="button" id="rtg_add_phone_field"><?php echo esc_html__( 'Quick Add Phone', 'rt-gate' ); ?></button>
+						</div>
 						<table class="widefat striped rtg-form-builder-table" id="rtg_field_builder_table">
 							<thead>
 								<tr>
@@ -360,6 +396,7 @@ class RTG_Admin {
 									<th><?php echo esc_html__( 'Type', 'rt-gate' ); ?></th>
 									<th><?php echo esc_html__( 'Required', 'rt-gate' ); ?></th>
 									<th><?php echo esc_html__( 'Placeholder / Options', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Reorder', 'rt-gate' ); ?></th>
 									<th><?php echo esc_html__( 'Remove', 'rt-gate' ); ?></th>
 								</tr>
 							</thead>
@@ -370,7 +407,9 @@ class RTG_Admin {
 							<button type="button" class="button button-secondary" id="rtg_load_from_json"><?php echo esc_html__( 'Load From JSON', 'rt-gate' ); ?></button>
 							<button type="button" class="button button-primary" id="rtg_apply_to_json"><?php echo esc_html__( 'Apply Fields to JSON', 'rt-gate' ); ?></button>
 						</div>
+						<p class="description"><?php echo esc_html__( 'Available field types: text, email, tel, company, textarea, select, radio, checkbox, url, number, date.', 'rt-gate' ); ?></p>
 						<p class="description"><?php echo esc_html__( 'For select/radio/checkbox fields, enter options as comma-separated values (example: Investor, Advisor, Other).', 'rt-gate' ); ?></p>
+						<p class="rtg-builder-status" id="rtg_builder_status" aria-live="polite"></p>
 					</div>
 				</div>
 				<?php submit_button( $record ? esc_html__( 'Update Form', 'rt-gate' ) : esc_html__( 'Create Form', 'rt-gate' ) ); ?>
@@ -382,28 +421,78 @@ class RTG_Admin {
 					var addButton = document.getElementById('rtg_add_field_row');
 					var loadButton = document.getElementById('rtg_load_from_json');
 					var applyButton = document.getElementById('rtg_apply_to_json');
+					var statusNode = document.getElementById('rtg_builder_status');
+					var templateSelect = document.getElementById('rtg_form_template_select');
+					var templateButton = document.getElementById('rtg_insert_template');
+					var quickEmailButton = document.getElementById('rtg_add_email_field');
+					var quickNameButton = document.getElementById('rtg_add_name_field');
+					var quickPhoneButton = document.getElementById('rtg_add_phone_field');
 
 					if (!rowsContainer || !jsonTextarea || !addButton || !loadButton || !applyButton) {
 						return;
 					}
 
-					var fieldTypes = ['text', 'email', 'tel', 'company', 'textarea', 'select', 'radio', 'checkbox'];
+					var fieldTypes = ['text', 'email', 'tel', 'company', 'textarea', 'select', 'radio', 'checkbox', 'url', 'number', 'date'];
+					var fieldTypeHelp = {
+						text: 'Great for plain short text.',
+						email: 'Use for email addresses.',
+						tel: 'Use for phone numbers.',
+						company: 'Use when collecting organization names.',
+						textarea: 'Best for longer responses.',
+						select: 'Comma-separated options required.',
+						radio: 'Comma-separated options required.',
+						checkbox: 'Comma-separated options required.',
+						url: 'Use for website/profile links.',
+						number: 'Use for numeric values.',
+						date: 'Use for date values.'
+					};
+					var formTemplates = {
+						lead_gen: [
+							{ type: 'text', label: 'Full Name', key: 'full_name', required: true, placeholder: 'Jane Smith' },
+							{ type: 'email', label: 'Email Address', key: 'email', required: true, placeholder: 'you@company.com' },
+							{ type: 'company', label: 'Company', key: 'company', required: true, placeholder: 'Real Treasury' },
+							{ type: 'select', label: 'Role', key: 'role', required: true, options: ['CFO', 'Finance Lead', 'Operations', 'Other'] }
+						],
+						webinar: [
+							{ type: 'text', label: 'Full Name', key: 'full_name', required: true },
+							{ type: 'email', label: 'Email Address', key: 'email', required: true },
+							{ type: 'company', label: 'Company', key: 'company', required: false },
+							{ type: 'select', label: 'Session Preference', key: 'session_preference', required: true, options: ['Morning', 'Afternoon', 'On-demand'] },
+							{ type: 'checkbox', label: 'Topics of Interest', key: 'topics', required: false, options: ['Treasury', 'Reporting', 'Automation'] }
+						],
+						download: [
+							{ type: 'email', label: 'Work Email', key: 'email', required: true },
+							{ type: 'text', label: 'First Name', key: 'first_name', required: true },
+							{ type: 'text', label: 'Last Name', key: 'last_name', required: true },
+							{ type: 'company', label: 'Company', key: 'company', required: false },
+							{ type: 'radio', label: 'I am evaluating this for', key: 'use_case', required: true, options: ['Myself', 'My team', 'My clients'] }
+						]
+					};
+
+					function setStatus(message) {
+						if (statusNode) {
+							statusNode.textContent = message;
+						}
+					}
 
 					function createFieldRow(field) {
 						var defaults = field || {};
+						var selectedType = defaults.type || 'text';
+						var extraValue = (defaults.placeholder || (defaults.options ? defaults.options.join(', ') : '')) || '';
 						var row = document.createElement('tr');
 						row.innerHTML =
 							'<td><input type="text" class="rtg-f-label" value="' + (defaults.label || '') + '" placeholder="Full Name" /></td>' +
 							'<td><input type="text" class="rtg-f-key" value="' + (defaults.key || '') + '" placeholder="full_name" /></td>' +
 							'<td>' +
 								'<select class="rtg-f-type">' + fieldTypes.map(function (type) {
-									var selected = defaults.type === type ? ' selected' : '';
+									var selected = selectedType === type ? ' selected' : '';
 									return '<option value="' + type + '"' + selected + '>' + type + '</option>';
 								}).join('') +
 								'</select>' +
 							'</td>' +
 							'<td><label><input type="checkbox" class="rtg-f-required"' + (defaults.required ? ' checked' : '') + ' /> <?php echo esc_js( __( 'Yes', 'rt-gate' ) ); ?></label></td>' +
-							'<td><input type="text" class="rtg-f-extra" value="' + ((defaults.placeholder || (defaults.options ? defaults.options.join(', ') : '')) || '') + '" placeholder="Enter placeholder or options" /></td>' +
+							'<td><input type="text" class="rtg-f-extra" value="' + extraValue + '" placeholder="Enter placeholder or options" /><small class="rtg-f-extra-help">' + (fieldTypeHelp[selectedType] || '') + '</small></td>' +
+							'<td><button type="button" class="button-link rtg-move-up">↑</button> <button type="button" class="button-link rtg-move-down">↓</button></td>' +
 							'<td><button type="button" class="button-link-delete rtg-remove-row"><?php echo esc_js( __( 'Remove', 'rt-gate' ) ); ?></button></td>';
 
 						rowsContainer.appendChild(row);
@@ -415,6 +504,7 @@ class RTG_Admin {
 
 					function collectRows() {
 						var schema = [];
+						var usedKeys = {};
 						rowsContainer.querySelectorAll('tr').forEach(function (row) {
 							var label = row.querySelector('.rtg-f-label').value.trim();
 							var keyInput = row.querySelector('.rtg-f-key');
@@ -427,6 +517,19 @@ class RTG_Admin {
 							}
 
 							var key = sanitizeKey(keyInput.value || label);
+							if (!key) {
+								return;
+							}
+
+							if (usedKeys[key]) {
+								var suffix = 2;
+								while (usedKeys[key + '_' + suffix]) {
+									suffix++;
+								}
+								key = key + '_' + suffix;
+							}
+
+							usedKeys[key] = true;
 							keyInput.value = key;
 
 							var field = {
@@ -452,20 +555,61 @@ class RTG_Admin {
 
 					addButton.addEventListener('click', function () {
 						createFieldRow();
+						setStatus('Field added.');
+					});
+
+					rowsContainer.addEventListener('input', function (event) {
+						if (event.target.classList.contains('rtg-f-label')) {
+							var row = event.target.closest('tr');
+							var keyInput = row.querySelector('.rtg-f-key');
+							if (!keyInput.value.trim()) {
+								keyInput.value = sanitizeKey(event.target.value);
+							}
+						}
+					});
+
+					rowsContainer.addEventListener('change', function (event) {
+						if (!event.target.classList.contains('rtg-f-type')) {
+							return;
+						}
+
+						var row = event.target.closest('tr');
+						var help = row.querySelector('.rtg-f-extra-help');
+						if (help) {
+							help.textContent = fieldTypeHelp[event.target.value] || '';
+						}
 					});
 
 					rowsContainer.addEventListener('click', function (event) {
-						if (!event.target.classList.contains('rtg-remove-row')) {
+						var row = event.target.closest('tr');
+						if (!row) {
 							return;
 						}
 
 						event.preventDefault();
-						event.target.closest('tr').remove();
+
+						if (event.target.classList.contains('rtg-remove-row')) {
+							row.remove();
+							setStatus('Field removed.');
+							return;
+						}
+
+						if (event.target.classList.contains('rtg-move-up') && row.previousElementSibling) {
+							rowsContainer.insertBefore(row, row.previousElementSibling);
+							setStatus('Field moved up.');
+							return;
+						}
+
+						if (event.target.classList.contains('rtg-move-down') && row.nextElementSibling) {
+							rowsContainer.insertBefore(row.nextElementSibling, row);
+							setStatus('Field moved down.');
+						}
 					});
 
 					applyButton.addEventListener('click', function () {
 						var schema = collectRows();
 						jsonTextarea.value = JSON.stringify(schema, null, 2);
+						setStatus('Schema updated from builder.');
 					});
 
 					loadButton.addEventListener('click', function () {
@@ -486,10 +630,49 @@ class RTG_Admin {
 							parsed.forEach(function (field) {
 								createFieldRow(field);
 							});
+							setStatus('Loaded fields from JSON.');
 						} else {
 							createFieldRow({ type: 'email', label: 'Email Address', key: 'email', required: true });
+							setStatus('Added a starter email field.');
 						}
 					});
+
+					if (templateButton && templateSelect) {
+						templateButton.addEventListener('click', function () {
+							var templateKey = templateSelect.value;
+							if (!templateKey || !formTemplates[templateKey]) {
+								window.alert('<?php echo esc_js( __( 'Please choose a template first.', 'rt-gate' ) ); ?>');
+								return;
+							}
+
+							rowsContainer.innerHTML = '';
+							formTemplates[templateKey].forEach(function (field) {
+								createFieldRow(field);
+							});
+							setStatus('Template inserted. Click "Apply Fields to JSON" to save it into schema JSON.');
+						});
+					}
+
+					if (quickEmailButton) {
+						quickEmailButton.addEventListener('click', function () {
+							createFieldRow({ type: 'email', label: 'Email Address', key: 'email', required: true });
+							setStatus('Quick email field added.');
+						});
+					}
+
+					if (quickNameButton) {
+						quickNameButton.addEventListener('click', function () {
+							createFieldRow({ type: 'text', label: 'Full Name', key: 'full_name', required: true });
+							setStatus('Quick name field added.');
+						});
+					}
+
+					if (quickPhoneButton) {
+						quickPhoneButton.addEventListener('click', function () {
+							createFieldRow({ type: 'tel', label: 'Phone Number', key: 'phone', required: false });
+							setStatus('Quick phone field added.');
+						});
+					}
 
 					loadButton.click();
 				})();
