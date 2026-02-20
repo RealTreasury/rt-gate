@@ -266,26 +266,234 @@ class RTG_Admin {
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'Forms', 'rt-gate' ); ?></h1>
 			<?php self::render_notice(); ?>
+			<style>
+				.rtg-form-builder-grid {
+					display: grid;
+					gap: 20px;
+					grid-template-columns: 1.4fr 1fr;
+					margin: 16px 0 8px;
+				}
+
+				.rtg-card {
+					background: #fff;
+					border: 1px solid #dcdcde;
+					border-radius: 8px;
+					padding: 16px;
+				}
+
+				.rtg-card h2,
+				.rtg-card h3 {
+					margin-top: 0;
+				}
+
+				.rtg-form-builder-table td {
+					vertical-align: middle;
+				}
+
+				.rtg-form-builder-table input,
+				.rtg-form-builder-table select {
+					width: 100%;
+				}
+
+				.rtg-form-builder-actions {
+					display: flex;
+					gap: 8px;
+					margin-top: 10px;
+				}
+
+				.rtg-helper-list {
+					list-style: decimal;
+					padding-left: 18px;
+				}
+
+				@media (max-width: 1080px) {
+					.rtg-form-builder-grid {
+						grid-template-columns: 1fr;
+					}
+				}
+			</style>
+
+			<div class="rtg-card">
+				<h2><?php echo esc_html__( 'No-code form builder guide', 'rt-gate' ); ?></h2>
+				<ol class="rtg-helper-list">
+					<li><?php echo esc_html__( 'Enter a form name and consent text.', 'rt-gate' ); ?></li>
+					<li><?php echo esc_html__( 'Use the Field Builder to add your form fields.', 'rt-gate' ); ?></li>
+					<li><?php echo esc_html__( 'Click “Apply Fields to JSON” to generate a valid schema automatically.', 'rt-gate' ); ?></li>
+					<li><?php echo esc_html__( 'Save the form, then map it to one or more assets on the Mappings tab.', 'rt-gate' ); ?></li>
+				</ol>
+			</div>
+
 			<form method="post">
 				<input type="hidden" name="rtg_action" value="save_form" />
 				<input type="hidden" name="_wpnonce" value="<?php echo esc_attr( $nonce ); ?>" />
 				<input type="hidden" name="id" value="<?php echo esc_attr( $record ? $record->id : 0 ); ?>" />
-				<table class="form-table" role="presentation">
-					<tr>
-						<th scope="row"><label for="rtg_form_name"><?php echo esc_html__( 'Name', 'rt-gate' ); ?></label></th>
-						<td><input id="rtg_form_name" name="name" type="text" class="regular-text" value="<?php echo esc_attr( $record ? $record->name : '' ); ?>" required /></td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="rtg_fields_schema"><?php echo esc_html__( 'Fields Schema (JSON)', 'rt-gate' ); ?></label></th>
-						<td><textarea id="rtg_fields_schema" name="fields_schema" rows="8" class="large-text"><?php echo esc_html( $record ? $record->fields_schema : '' ); ?></textarea></td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="rtg_consent_text"><?php echo esc_html__( 'Consent Text', 'rt-gate' ); ?></label></th>
-						<td><textarea id="rtg_consent_text" name="consent_text" rows="5" class="large-text"><?php echo esc_html( $record ? $record->consent_text : '' ); ?></textarea></td>
-					</tr>
-				</table>
+				<div class="rtg-form-builder-grid">
+					<div class="rtg-card">
+						<h3><?php echo esc_html__( 'Form details', 'rt-gate' ); ?></h3>
+						<table class="form-table" role="presentation">
+							<tr>
+								<th scope="row"><label for="rtg_form_name"><?php echo esc_html__( 'Name', 'rt-gate' ); ?></label></th>
+								<td><input id="rtg_form_name" name="name" type="text" class="regular-text" value="<?php echo esc_attr( $record ? $record->name : '' ); ?>" required /></td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="rtg_consent_text"><?php echo esc_html__( 'Consent Text', 'rt-gate' ); ?></label></th>
+								<td><textarea id="rtg_consent_text" name="consent_text" rows="5" class="large-text" placeholder="<?php echo esc_attr__( 'Example: I agree to receive updates and accept the privacy policy.', 'rt-gate' ); ?>"><?php echo esc_html( $record ? $record->consent_text : '' ); ?></textarea></td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="rtg_fields_schema"><?php echo esc_html__( 'Fields Schema (JSON)', 'rt-gate' ); ?></label></th>
+								<td>
+									<textarea id="rtg_fields_schema" name="fields_schema" rows="8" class="large-text" placeholder="<?php echo esc_attr__( 'Use the Field Builder to generate this automatically.', 'rt-gate' ); ?>"><?php echo esc_html( $record ? $record->fields_schema : '' ); ?></textarea>
+									<p class="description"><?php echo esc_html__( 'Advanced users can edit this JSON directly.', 'rt-gate' ); ?></p>
+								</td>
+							</tr>
+						</table>
+					</div>
+
+					<div class="rtg-card">
+						<h3><?php echo esc_html__( 'Field Builder', 'rt-gate' ); ?></h3>
+						<p><?php echo esc_html__( 'Add fields below, then generate the schema automatically.', 'rt-gate' ); ?></p>
+						<table class="widefat striped rtg-form-builder-table" id="rtg_field_builder_table">
+							<thead>
+								<tr>
+									<th><?php echo esc_html__( 'Label', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Key', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Type', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Required', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Placeholder / Options', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Remove', 'rt-gate' ); ?></th>
+								</tr>
+							</thead>
+							<tbody id="rtg_field_builder_rows"></tbody>
+						</table>
+						<div class="rtg-form-builder-actions">
+							<button type="button" class="button" id="rtg_add_field_row"><?php echo esc_html__( 'Add Field', 'rt-gate' ); ?></button>
+							<button type="button" class="button button-secondary" id="rtg_load_from_json"><?php echo esc_html__( 'Load From JSON', 'rt-gate' ); ?></button>
+							<button type="button" class="button button-primary" id="rtg_apply_to_json"><?php echo esc_html__( 'Apply Fields to JSON', 'rt-gate' ); ?></button>
+						</div>
+						<p class="description"><?php echo esc_html__( 'For select/radio/checkbox fields, enter options as comma-separated values (example: Investor, Advisor, Other).', 'rt-gate' ); ?></p>
+					</div>
+				</div>
 				<?php submit_button( $record ? esc_html__( 'Update Form', 'rt-gate' ) : esc_html__( 'Create Form', 'rt-gate' ) ); ?>
 			</form>
+			<script>
+				(function () {
+					var rowsContainer = document.getElementById('rtg_field_builder_rows');
+					var jsonTextarea = document.getElementById('rtg_fields_schema');
+					var addButton = document.getElementById('rtg_add_field_row');
+					var loadButton = document.getElementById('rtg_load_from_json');
+					var applyButton = document.getElementById('rtg_apply_to_json');
+
+					if (!rowsContainer || !jsonTextarea || !addButton || !loadButton || !applyButton) {
+						return;
+					}
+
+					var fieldTypes = ['text', 'email', 'tel', 'company', 'textarea', 'select', 'radio', 'checkbox'];
+
+					function createFieldRow(field) {
+						var defaults = field || {};
+						var row = document.createElement('tr');
+						row.innerHTML =
+							'<td><input type="text" class="rtg-f-label" value="' + (defaults.label || '') + '" placeholder="Full Name" /></td>' +
+							'<td><input type="text" class="rtg-f-key" value="' + (defaults.key || '') + '" placeholder="full_name" /></td>' +
+							'<td>' +
+								'<select class="rtg-f-type">' + fieldTypes.map(function (type) {
+									var selected = defaults.type === type ? ' selected' : '';
+									return '<option value="' + type + '"' + selected + '>' + type + '</option>';
+								}).join('') +
+								'</select>' +
+							'</td>' +
+							'<td><label><input type="checkbox" class="rtg-f-required"' + (defaults.required ? ' checked' : '') + ' /> <?php echo esc_js( __( 'Yes', 'rt-gate' ) ); ?></label></td>' +
+							'<td><input type="text" class="rtg-f-extra" value="' + ((defaults.placeholder || (defaults.options ? defaults.options.join(', ') : '')) || '') + '" placeholder="Enter placeholder or options" /></td>' +
+							'<td><button type="button" class="button-link-delete rtg-remove-row"><?php echo esc_js( __( 'Remove', 'rt-gate' ) ); ?></button></td>';
+
+						rowsContainer.appendChild(row);
+					}
+
+					function sanitizeKey(value) {
+						return value.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+					}
+
+					function collectRows() {
+						var schema = [];
+						rowsContainer.querySelectorAll('tr').forEach(function (row) {
+							var label = row.querySelector('.rtg-f-label').value.trim();
+							var keyInput = row.querySelector('.rtg-f-key');
+							var type = row.querySelector('.rtg-f-type').value;
+							var required = row.querySelector('.rtg-f-required').checked;
+							var extra = row.querySelector('.rtg-f-extra').value.trim();
+
+							if (!label) {
+								return;
+							}
+
+							var key = sanitizeKey(keyInput.value || label);
+							keyInput.value = key;
+
+							var field = {
+								key: key,
+								label: label,
+								type: type,
+								required: required
+							};
+
+							if (['select', 'radio', 'checkbox'].indexOf(type) !== -1 && extra) {
+								field.options = extra.split(',').map(function (value) {
+									return value.trim();
+								}).filter(Boolean);
+							} else if (extra) {
+								field.placeholder = extra;
+							}
+
+							schema.push(field);
+						});
+
+						return schema;
+					}
+
+					addButton.addEventListener('click', function () {
+						createFieldRow();
+					});
+
+					rowsContainer.addEventListener('click', function (event) {
+						if (!event.target.classList.contains('rtg-remove-row')) {
+							return;
+						}
+
+						event.preventDefault();
+						event.target.closest('tr').remove();
+					});
+
+					applyButton.addEventListener('click', function () {
+						var schema = collectRows();
+						jsonTextarea.value = JSON.stringify(schema, null, 2);
+					});
+
+					loadButton.addEventListener('click', function () {
+						var parsed = [];
+						var source = jsonTextarea.value.trim();
+
+						if (source) {
+							try {
+								parsed = JSON.parse(source);
+							} catch (error) {
+								window.alert('<?php echo esc_js( __( 'JSON is invalid. Please fix it first, then try loading again.', 'rt-gate' ) ); ?>');
+								return;
+							}
+						}
+
+						rowsContainer.innerHTML = '';
+						if (Array.isArray(parsed) && parsed.length) {
+							parsed.forEach(function (field) {
+								createFieldRow(field);
+							});
+						} else {
+							createFieldRow({ type: 'email', label: 'Email Address', key: 'email', required: true });
+						}
+					});
+
+					loadButton.click();
+				})();
+			</script>
 
 			<h2><?php echo esc_html__( 'Existing Forms', 'rt-gate' ); ?></h2>
 			<table class="widefat striped">
