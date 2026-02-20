@@ -491,6 +491,7 @@ class RTG_Admin {
 				(function () {
 					var rowsContainer = document.getElementById('rtg_field_builder_rows');
 					var jsonTextarea = document.getElementById('rtg_fields_schema');
+					var formElement = jsonTextarea ? jsonTextarea.closest('form') : null;
 					var addButton = document.getElementById('rtg_add_field_row');
 					var loadButton = document.getElementById('rtg_load_from_json');
 					var applyButton = document.getElementById('rtg_apply_to_json');
@@ -509,7 +510,7 @@ class RTG_Admin {
 						'Other'
 					];
 
-					if (!rowsContainer || !jsonTextarea || !addButton || !loadButton || !applyButton) {
+					if (!rowsContainer || !jsonTextarea || !formElement || !addButton || !loadButton || !applyButton) {
 						return;
 					}
 
@@ -695,6 +696,11 @@ class RTG_Admin {
 						var schema = collectRows();
 						jsonTextarea.value = JSON.stringify(schema, null, 2);
 						setStatus('Schema updated from builder.');
+					});
+
+					formElement.addEventListener('submit', function () {
+						var schema = collectRows();
+						jsonTextarea.value = JSON.stringify(schema, null, 2);
 					});
 
 					loadButton.addEventListener('click', function () {
