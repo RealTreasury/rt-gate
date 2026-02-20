@@ -241,7 +241,17 @@ class RTG_REST {
 			$assets[] = $asset_item;
 		}
 
-		self::insert_event( $lead_id, $form_id, isset( $mapped_assets[0]->asset_id ) ? (int) $mapped_assets[0]->asset_id : 0, 'form_submit', array( 'consent' => true ) );
+		$primary_asset_id = isset( $mapped_assets[0]->asset_id ) ? (int) $mapped_assets[0]->asset_id : 0;
+		RTG_Events::log_event( $lead_id, $form_id, $primary_asset_id, 'form_submit', array( 'consent' => true ) );
+		RTG_Webhook::maybe_dispatch(
+			'form_submit',
+			array(
+				'form_id'  => $form_id,
+				'lead_id'  => $lead_id,
+				'asset_id' => $primary_asset_id,
+				'assets'   => $assets,
+			)
+		);
 
 		return rest_ensure_response(
 			array(
@@ -323,42 +333,26 @@ class RTG_REST {
 
 		$form_id = self::find_form_id_for_asset( (int) $asset->id );
 
-		$saved = self::insert_event( (int) $token_row->lead_id, $form_id, (int) $asset->id, $event_type, $meta );
+		$saved = RTG_Events::log_event( (int) $token_row->lead_id, $form_id, (int) $asset->id, $event_type, $meta );
 		if ( ! $saved ) {
 			return new WP_Error( 'rtg_event_save_failed', 'Unable to record event.', array( 'status' => 500 ) );
 		}
 
+		RTG_Webhook::maybe_dispatch(
+			'asset_event',
+			array(
+				'lead_id'    => (int) $token_row->lead_id,
+				'form_id'    => $form_id,
+				'asset_id'   => (int) $asset->id,
+				'asset_slug' => $asset_slug,
+				'event_type' => $event_type,
+				'meta'       => $meta,
+			)
+		);
+
 		return rest_ensure_response( array( 'recorded' => true ) );
 	}
 
-	/**
-	 * Insert an event record.
-	 *
-	 * @param int    $lead_id Lead ID.
-	 * @param int    $form_id Form ID.
-	 * @param int    $asset_id Asset ID.
-	 * @param string $event_type Event type.
-	 * @param array  $meta Event metadata.
-	 * @return bool
-	 */
-	private static function insert_event( $lead_id, $form_id, $asset_id, $event_type, $meta ) {
-		global $wpdb;
-
-		$events_table = $wpdb->prefix . 'rtg_events';
-		$inserted     = $wpdb->insert(
-			$events_table,
-			array(
-				'lead_id'    => max( 0, absint( $lead_id ) ),
-				'form_id'    => max( 0, absint( $form_id ) ),
-				'asset_id'   => max( 0, absint( $asset_id ) ),
-				'event_type' => sanitize_key( $event_type ),
-				'meta'       => wp_json_encode( $meta ),
-			),
-			array( '%d', '%d', '%d', '%s', '%s' )
-		);
-
-		return false !== $inserted;
-	}
 
 	/**
 	 * Get asset by slug.
