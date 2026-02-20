@@ -65,6 +65,20 @@ class RTG_Token {
 	}
 
 	/**
+	 * Delete all expired tokens from the database.
+	 *
+	 * @return int Number of rows deleted.
+	 */
+	public static function cleanup_expired() {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'rtg_tokens';
+		$now   = gmdate( 'Y-m-d H:i:s' );
+
+		return (int) $wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE expires_at < %s", $now ) );
+	}
+
+	/**
 	 * Validate whether an expiry datetime is still valid.
 	 *
 	 * @param string $expires_at UTC datetime in Y-m-d H:i:s.

@@ -21,20 +21,39 @@ class RTG_Admin {
 	 * @return void
 	 */
 	public static function enqueue_admin_assets( $hook_suffix ) {
-		if ( 'real-treasury-gate_page_rtg-assets' !== $hook_suffix ) {
+		$plugin_pages = array(
+			'toplevel_page_rtg-dashboard',
+			'real-treasury-gate_page_rtg-forms',
+			'real-treasury-gate_page_rtg-assets',
+			'real-treasury-gate_page_rtg-mappings',
+			'real-treasury-gate_page_rtg-events',
+			'real-treasury-gate_page_rtg-settings',
+		);
+
+		if ( ! in_array( $hook_suffix, $plugin_pages, true ) ) {
 			return;
 		}
 
-		wp_enqueue_media();
-		$script_path = RTG_PLUGIN_DIR . 'assets/js/admin-assets.js';
-
-		wp_enqueue_script(
-			'rtg-admin-assets',
-			RTG_PLUGIN_URL . 'assets/js/admin-assets.js',
-			array( 'jquery' ),
-			file_exists( $script_path ) ? (string) filemtime( $script_path ) : null,
-			true
+		$css_path = RTG_PLUGIN_DIR . 'assets/css/admin.css';
+		wp_enqueue_style(
+			'rtg-admin-styles',
+			RTG_PLUGIN_URL . 'assets/css/admin.css',
+			array(),
+			file_exists( $css_path ) ? (string) filemtime( $css_path ) : null
 		);
+
+		if ( 'real-treasury-gate_page_rtg-assets' === $hook_suffix ) {
+			wp_enqueue_media();
+			$script_path = RTG_PLUGIN_DIR . 'assets/js/admin-assets.js';
+
+			wp_enqueue_script(
+				'rtg-admin-assets',
+				RTG_PLUGIN_URL . 'assets/js/admin-assets.js',
+				array( 'jquery' ),
+				file_exists( $script_path ) ? (string) filemtime( $script_path ) : null,
+				true
+			);
+		}
 	}
 
 	/**
@@ -47,14 +66,23 @@ class RTG_Admin {
 			esc_html__( 'Real Treasury Gate', 'rt-gate' ),
 			esc_html__( 'Real Treasury Gate', 'rt-gate' ),
 			'manage_options',
-			'rtg-forms',
-			array( __CLASS__, 'render_forms_page' ),
+			'rtg-dashboard',
+			array( __CLASS__, 'render_dashboard_page' ),
 			'dashicons-lock',
 			56
 		);
 
 		add_submenu_page(
-			'rtg-forms',
+			'rtg-dashboard',
+			esc_html__( 'Dashboard', 'rt-gate' ),
+			esc_html__( 'Dashboard', 'rt-gate' ),
+			'manage_options',
+			'rtg-dashboard',
+			array( __CLASS__, 'render_dashboard_page' )
+		);
+
+		add_submenu_page(
+			'rtg-dashboard',
 			esc_html__( 'Forms', 'rt-gate' ),
 			esc_html__( 'Forms', 'rt-gate' ),
 			'manage_options',
@@ -63,7 +91,7 @@ class RTG_Admin {
 		);
 
 		add_submenu_page(
-			'rtg-forms',
+			'rtg-dashboard',
 			esc_html__( 'Assets', 'rt-gate' ),
 			esc_html__( 'Assets', 'rt-gate' ),
 			'manage_options',
@@ -72,7 +100,7 @@ class RTG_Admin {
 		);
 
 		add_submenu_page(
-			'rtg-forms',
+			'rtg-dashboard',
 			esc_html__( 'Mappings', 'rt-gate' ),
 			esc_html__( 'Mappings', 'rt-gate' ),
 			'manage_options',
@@ -83,6 +111,15 @@ class RTG_Admin {
 		if ( class_exists( 'RTG_Events' ) ) {
 			RTG_Events::register_submenu();
 		}
+
+		add_submenu_page(
+			'rtg-dashboard',
+			esc_html__( 'Settings', 'rt-gate' ),
+			esc_html__( 'Settings', 'rt-gate' ),
+			'manage_options',
+			'rtg-settings',
+			array( __CLASS__, 'render_settings_page' )
+		);
 	}
 
 	/**
@@ -114,6 +151,22 @@ class RTG_Admin {
 				check_admin_referer( 'rtg_save_mapping' );
 				self::save_mapping();
 				break;
+			case 'delete_form':
+				check_admin_referer( 'rtg_delete_form' );
+				self::delete_record( 'rtg_forms', 'rtg-forms', 'Form deleted.' );
+				break;
+			case 'delete_asset':
+				check_admin_referer( 'rtg_delete_asset' );
+				self::delete_record( 'rtg_assets', 'rtg-assets', 'Asset deleted.' );
+				break;
+			case 'delete_mapping':
+				check_admin_referer( 'rtg_delete_mapping' );
+				self::delete_record( 'rtg_mappings', 'rtg-mappings', 'Mapping deleted.' );
+				break;
+			case 'save_settings':
+				check_admin_referer( 'rtg_save_settings' );
+				self::save_settings();
+				break;
 		}
 	}
 
@@ -135,9 +188,13 @@ class RTG_Admin {
 			$privacy_policy_url
 		);
 
+		$raw_schema    = isset( $_POST['fields_schema'] ) ? wp_unslash( $_POST['fields_schema'] ) : '';
+		$decoded_schema = json_decode( $raw_schema, true );
+		$safe_schema    = is_array( $decoded_schema ) ? wp_json_encode( $decoded_schema ) : '[]';
+
 		$data = array(
 			'name'          => isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '',
-			'fields_schema' => isset( $_POST['fields_schema'] ) ? sanitize_text_field( wp_unslash( $_POST['fields_schema'] ) ) : '',
+			'fields_schema' => $safe_schema,
 			'consent_text'  => sanitize_text_field( $consent_text ),
 		);
 
@@ -263,6 +320,144 @@ class RTG_Admin {
 	}
 
 	/**
+	 * Delete a record from a plugin table by ID.
+	 *
+	 * @param string $table_suffix Table name suffix (e.g. 'rtg_forms').
+	 * @param string $redirect_page Admin page slug to redirect to.
+	 * @param string $notice Success message.
+	 * @return void
+	 */
+	private static function delete_record( $table_suffix, $redirect_page, $notice ) {
+		global $wpdb;
+
+		$id = isset( $_POST['delete_id'] ) ? absint( wp_unslash( $_POST['delete_id'] ) ) : 0;
+		if ( $id > 0 ) {
+			$table = $wpdb->prefix . $table_suffix;
+			$wpdb->delete( $table, array( 'id' => $id ), array( '%d' ) );
+		}
+
+		wp_safe_redirect( admin_url( 'admin.php?page=' . $redirect_page . '&rtg_notice=' . rawurlencode( $notice ) ) );
+		exit;
+	}
+
+	/**
+	 * Save plugin settings.
+	 *
+	 * @return void
+	 */
+	private static function save_settings() {
+		$settings = array(
+			'token_ttl_minutes' => isset( $_POST['token_ttl_minutes'] ) ? max( 1, absint( wp_unslash( $_POST['token_ttl_minutes'] ) ) ) : 60,
+			'allowed_origins'   => isset( $_POST['allowed_origins'] ) ? sanitize_textarea_field( wp_unslash( $_POST['allowed_origins'] ) ) : '',
+			'webhook_url'       => isset( $_POST['webhook_url'] ) ? esc_url_raw( wp_unslash( $_POST['webhook_url'] ) ) : '',
+			'webhook_secret'    => isset( $_POST['webhook_secret'] ) ? sanitize_text_field( wp_unslash( $_POST['webhook_secret'] ) ) : '',
+			'webhook_events'    => isset( $_POST['webhook_events'] ) && is_array( $_POST['webhook_events'] )
+				? array_map( 'sanitize_key', wp_unslash( $_POST['webhook_events'] ) )
+				: array(),
+		);
+
+		update_option( 'rtg_settings', $settings );
+
+		wp_safe_redirect( admin_url( 'admin.php?page=rtg-settings&rtg_notice=' . rawurlencode( 'Settings saved.' ) ) );
+		exit;
+	}
+
+	/**
+	 * Render the dashboard overview page.
+	 *
+	 * @return void
+	 */
+	public static function render_dashboard_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to access this page.', 'rt-gate' ) );
+		}
+
+		global $wpdb;
+		$total_forms   = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}rtg_forms" );
+		$total_assets  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}rtg_assets" );
+		$total_leads   = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}rtg_leads" );
+		$total_events  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}rtg_events" );
+		$active_tokens = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(*) FROM {$wpdb->prefix}rtg_tokens WHERE expires_at > %s",
+			gmdate( 'Y-m-d H:i:s' )
+		) );
+
+		$recent_events = $wpdb->get_results(
+			"SELECT e.id, e.event_type, e.created_at,
+				COALESCE(l.email, '') AS email,
+				COALESCE(f.name, '') AS form_name,
+				COALESCE(a.name, '') AS asset_name
+			FROM {$wpdb->prefix}rtg_events e
+			LEFT JOIN {$wpdb->prefix}rtg_leads l ON l.id = e.lead_id
+			LEFT JOIN {$wpdb->prefix}rtg_forms f ON f.id = e.form_id
+			LEFT JOIN {$wpdb->prefix}rtg_assets a ON a.id = e.asset_id
+			ORDER BY e.id DESC LIMIT 10"
+		);
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html__( 'Real Treasury Gate — Dashboard', 'rt-gate' ); ?></h1>
+
+			<div class="rtg-dashboard-grid">
+				<div class="rtg-stat-card">
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-forms' ) ); ?>">
+						<span class="rtg-stat-number"><?php echo esc_html( $total_forms ); ?></span>
+						<span class="rtg-stat-label"><?php echo esc_html__( 'Forms', 'rt-gate' ); ?></span>
+					</a>
+				</div>
+				<div class="rtg-stat-card">
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-assets' ) ); ?>">
+						<span class="rtg-stat-number"><?php echo esc_html( $total_assets ); ?></span>
+						<span class="rtg-stat-label"><?php echo esc_html__( 'Assets', 'rt-gate' ); ?></span>
+					</a>
+				</div>
+				<div class="rtg-stat-card">
+					<span class="rtg-stat-number"><?php echo esc_html( $total_leads ); ?></span>
+					<span class="rtg-stat-label"><?php echo esc_html__( 'Leads', 'rt-gate' ); ?></span>
+				</div>
+				<div class="rtg-stat-card">
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-events' ) ); ?>">
+						<span class="rtg-stat-number"><?php echo esc_html( $total_events ); ?></span>
+						<span class="rtg-stat-label"><?php echo esc_html__( 'Events', 'rt-gate' ); ?></span>
+					</a>
+				</div>
+				<div class="rtg-stat-card">
+					<span class="rtg-stat-number"><?php echo esc_html( $active_tokens ); ?></span>
+					<span class="rtg-stat-label"><?php echo esc_html__( 'Active Tokens', 'rt-gate' ); ?></span>
+				</div>
+			</div>
+
+			<h2><?php echo esc_html__( 'Recent Events', 'rt-gate' ); ?></h2>
+			<table class="widefat striped">
+				<thead>
+					<tr>
+						<th><?php echo esc_html__( 'Email', 'rt-gate' ); ?></th>
+						<th><?php echo esc_html__( 'Form', 'rt-gate' ); ?></th>
+						<th><?php echo esc_html__( 'Asset', 'rt-gate' ); ?></th>
+						<th><?php echo esc_html__( 'Event Type', 'rt-gate' ); ?></th>
+						<th><?php echo esc_html__( 'Created', 'rt-gate' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php if ( ! empty( $recent_events ) ) : ?>
+						<?php foreach ( $recent_events as $event ) : ?>
+							<tr>
+								<td><?php echo esc_html( $event->email ); ?></td>
+								<td><?php echo esc_html( $event->form_name ); ?></td>
+								<td><?php echo esc_html( $event->asset_name ); ?></td>
+								<td><?php echo esc_html( $event->event_type ); ?></td>
+								<td><?php echo esc_html( $event->created_at ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					<?php else : ?>
+						<tr><td colspan="5"><?php echo esc_html__( 'No events recorded yet.', 'rt-gate' ); ?></td></tr>
+					<?php endif; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php
+	}
+
+	/**
 	 * Render forms page.
 	 *
 	 * @return void
@@ -288,108 +483,6 @@ class RTG_Admin {
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'Forms', 'rt-gate' ); ?></h1>
 			<?php self::render_notice(); ?>
-			<style>
-				.rtg-form-builder-grid {
-					display: grid;
-					gap: 20px;
-					grid-template-columns: minmax(520px, 1.35fr) minmax(780px, 2fr);
-					margin: 16px 0 8px;
-					align-items: start;
-				}
-
-				.rtg-card {
-					background: #fff;
-					border: 1px solid #dcdcde;
-					border-radius: 8px;
-					padding: 20px;
-				}
-
-				.rtg-card h2,
-				.rtg-card h3 {
-					margin-top: 0;
-				}
-
-				.rtg-form-builder-table td {
-					vertical-align: top;
-					padding: 10px 8px;
-				}
-
-				.rtg-form-builder-table th {
-					padding: 10px 8px;
-					white-space: nowrap;
-				}
-
-				.rtg-form-builder-table input,
-				.rtg-form-builder-table select {
-					width: 100%;
-					min-width: 120px;
-				}
-
-				.rtg-form-builder-table .button {
-					white-space: nowrap;
-				}
-
-				.rtg-form-builder-table {
-					table-layout: auto;
-				}
-
-				.rtg-form-builder-scroller {
-					overflow-x: auto;
-					padding-bottom: 4px;
-				}
-
-				.rtg-form-builder-actions {
-					display: flex;
-					flex-wrap: wrap;
-					gap: 8px;
-					margin-top: 10px;
-				}
-
-				.rtg-form-builder-presets {
-					display: flex;
-					flex-wrap: wrap;
-					gap: 8px;
-					margin-bottom: 10px;
-				}
-
-				.rtg-form-builder-presets select {
-					min-width: 220px;
-				}
-
-				.rtg-builder-status {
-					margin-top: 10px;
-					font-style: italic;
-				}
-
-				.rtg-f-extra-help {
-					display: block;
-					margin-top: 4px;
-					color: #646970;
-					font-size: 12px;
-				}
-
-				.rtg-helper-list {
-					list-style: decimal;
-					padding-left: 18px;
-				}
-
-				@media (max-width: 1400px) {
-					.rtg-form-builder-grid {
-						grid-template-columns: 1fr;
-					}
-				}
-
-				@media (max-width: 782px) {
-					.rtg-card {
-						padding: 16px;
-					}
-
-					.rtg-form-builder-table th,
-					.rtg-form-builder-table td {
-						padding: 8px 6px;
-					}
-				}
-			</style>
 
 			<div class="rtg-card">
 				<h2><?php echo esc_html__( 'No-code form builder guide', 'rt-gate' ); ?></h2>
@@ -800,7 +893,16 @@ class RTG_Admin {
 								<td><?php echo esc_html( $form->id ); ?></td>
 								<td><?php echo esc_html( $form->name ); ?></td>
 								<td><?php echo esc_html( $form->created_at ); ?></td>
-								<td><a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-forms&edit_id=' . absint( $form->id ) ) ); ?>"><?php echo esc_html__( 'Edit', 'rt-gate' ); ?></a></td>
+								<td>
+									<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-forms&edit_id=' . absint( $form->id ) ) ); ?>"><?php echo esc_html__( 'Edit', 'rt-gate' ); ?></a>
+									&nbsp;|&nbsp;
+									<form method="post" style="display:inline;" onsubmit="return confirm('<?php echo esc_js( __( 'Delete this form? This cannot be undone.', 'rt-gate' ) ); ?>');">
+										<?php wp_nonce_field( 'rtg_delete_form' ); ?>
+										<input type="hidden" name="rtg_action" value="delete_form" />
+										<input type="hidden" name="delete_id" value="<?php echo esc_attr( $form->id ); ?>" />
+										<button type="submit" class="button-link button-link-delete"><?php echo esc_html__( 'Delete', 'rt-gate' ); ?></button>
+									</form>
+								</td>
 							</tr>
 						<?php endforeach; ?>
 					<?php else : ?>
@@ -895,6 +997,17 @@ class RTG_Admin {
 				</table>
 				<?php submit_button( $record ? esc_html__( 'Update Asset', 'rt-gate' ) : esc_html__( 'Create Asset', 'rt-gate' ) ); ?>
 			</form>
+			<script>
+				(function () {
+					var nameInput = document.getElementById('rtg_asset_name');
+					var slugInput = document.getElementById('rtg_asset_slug');
+					if (!nameInput || !slugInput) return;
+					nameInput.addEventListener('blur', function () {
+						if (slugInput.value.trim()) return;
+						slugInput.value = nameInput.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+					});
+				})();
+			</script>
 
 			<h2><?php echo esc_html__( 'Existing Assets', 'rt-gate' ); ?></h2>
 			<table class="widefat striped">
@@ -917,7 +1030,16 @@ class RTG_Admin {
 								<td><?php echo esc_html( $asset->slug ); ?></td>
 								<td><?php echo esc_html( $asset->type ); ?></td>
 								<td><?php echo esc_html( $asset->created_at ); ?></td>
-								<td><a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-assets&edit_id=' . absint( $asset->id ) ) ); ?>"><?php echo esc_html__( 'Edit', 'rt-gate' ); ?></a></td>
+								<td>
+									<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-assets&edit_id=' . absint( $asset->id ) ) ); ?>"><?php echo esc_html__( 'Edit', 'rt-gate' ); ?></a>
+									&nbsp;|&nbsp;
+									<form method="post" style="display:inline;" onsubmit="return confirm('<?php echo esc_js( __( 'Delete this asset? This cannot be undone.', 'rt-gate' ) ); ?>');">
+										<?php wp_nonce_field( 'rtg_delete_asset' ); ?>
+										<input type="hidden" name="rtg_action" value="delete_asset" />
+										<input type="hidden" name="delete_id" value="<?php echo esc_attr( $asset->id ); ?>" />
+										<button type="submit" class="button-link button-link-delete"><?php echo esc_html__( 'Delete', 'rt-gate' ); ?></button>
+									</form>
+								</td>
 							</tr>
 						<?php endforeach; ?>
 					<?php else : ?>
@@ -986,7 +1108,11 @@ class RTG_Admin {
 					</tr>
 					<tr>
 						<th scope="row"><label for="rtg_iframe_src_template"><?php echo esc_html__( 'Iframe Source Template', 'rt-gate' ); ?></label></th>
-						<td><input id="rtg_iframe_src_template" name="iframe_src_template" type="text" class="large-text" value="<?php echo esc_attr( $record ? $record->iframe_src_template : '' ); ?>" required /></td>
+						<td>
+							<input id="rtg_iframe_src_template" name="iframe_src_template" type="text" class="large-text" value="<?php echo esc_attr( $record ? $record->iframe_src_template : '' ); ?>" required placeholder="https://yoursite.github.io/gate/?asset={asset_slug}&t={token}" />
+							<p class="description"><?php echo esc_html__( 'URL template for the gated iframe. Available placeholders: {asset_slug} and {token}.', 'rt-gate' ); ?></p>
+							<p class="description"><?php echo esc_html__( 'Example: https://yoursite.github.io/gate/?asset={asset_slug}&t={token}', 'rt-gate' ); ?></p>
+						</td>
 					</tr>
 				</table>
 				<?php submit_button( $record ? esc_html__( 'Update Mapping', 'rt-gate' ) : esc_html__( 'Create Mapping', 'rt-gate' ) ); ?>
@@ -1013,7 +1139,16 @@ class RTG_Admin {
 								<td><?php echo esc_html( $mapping->asset_name ); ?></td>
 								<td><?php echo esc_html( $mapping->iframe_src_template ); ?></td>
 								<td><?php echo esc_html( $mapping->created_at ); ?></td>
-								<td><a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-mappings&edit_id=' . absint( $mapping->id ) ) ); ?>"><?php echo esc_html__( 'Edit', 'rt-gate' ); ?></a></td>
+								<td>
+									<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-mappings&edit_id=' . absint( $mapping->id ) ) ); ?>"><?php echo esc_html__( 'Edit', 'rt-gate' ); ?></a>
+									&nbsp;|&nbsp;
+									<form method="post" style="display:inline;" onsubmit="return confirm('<?php echo esc_js( __( 'Delete this mapping? This cannot be undone.', 'rt-gate' ) ); ?>');">
+										<?php wp_nonce_field( 'rtg_delete_mapping' ); ?>
+										<input type="hidden" name="rtg_action" value="delete_mapping" />
+										<input type="hidden" name="delete_id" value="<?php echo esc_attr( $mapping->id ); ?>" />
+										<button type="submit" class="button-link button-link-delete"><?php echo esc_html__( 'Delete', 'rt-gate' ); ?></button>
+									</form>
+								</td>
 							</tr>
 						<?php endforeach; ?>
 					<?php else : ?>
@@ -1021,6 +1156,90 @@ class RTG_Admin {
 					<?php endif; ?>
 				</tbody>
 			</table>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render the settings page.
+	 *
+	 * @return void
+	 */
+	public static function render_settings_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to access this page.', 'rt-gate' ) );
+		}
+
+		$settings        = get_option( 'rtg_settings', array() );
+		$settings        = is_array( $settings ) ? $settings : array();
+		$ttl_minutes     = isset( $settings['token_ttl_minutes'] ) ? absint( $settings['token_ttl_minutes'] ) : 60;
+		$allowed_origins = isset( $settings['allowed_origins'] ) ? (string) $settings['allowed_origins'] : '';
+		$webhook_url     = isset( $settings['webhook_url'] ) ? (string) $settings['webhook_url'] : '';
+		$webhook_secret  = isset( $settings['webhook_secret'] ) ? (string) $settings['webhook_secret'] : '';
+		$webhook_events  = isset( $settings['webhook_events'] ) && is_array( $settings['webhook_events'] ) ? $settings['webhook_events'] : array();
+
+		$nonce = wp_create_nonce( 'rtg_save_settings' );
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html__( 'Settings', 'rt-gate' ); ?></h1>
+			<?php self::render_notice(); ?>
+			<form method="post">
+				<input type="hidden" name="rtg_action" value="save_settings" />
+				<input type="hidden" name="_wpnonce" value="<?php echo esc_attr( $nonce ); ?>" />
+
+				<h2><?php echo esc_html__( 'Token Settings', 'rt-gate' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><label for="rtg_token_ttl_minutes"><?php echo esc_html__( 'Token TTL (minutes)', 'rt-gate' ); ?></label></th>
+						<td>
+							<input id="rtg_token_ttl_minutes" name="token_ttl_minutes" type="number" min="1" class="small-text" value="<?php echo esc_attr( $ttl_minutes ); ?>" />
+							<p class="description"><?php echo esc_html__( 'How long access tokens remain valid after form submission. Default: 60 minutes.', 'rt-gate' ); ?></p>
+						</td>
+					</tr>
+				</table>
+
+				<h2><?php echo esc_html__( 'CORS Settings', 'rt-gate' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><label for="rtg_allowed_origins"><?php echo esc_html__( 'Allowed Origins', 'rt-gate' ); ?></label></th>
+						<td>
+							<textarea id="rtg_allowed_origins" name="allowed_origins" rows="4" class="large-text" placeholder="github.io"><?php echo esc_textarea( $allowed_origins ); ?></textarea>
+							<p class="description"><?php echo esc_html__( 'One hostname per line. Subdomains are automatically allowed. Default: github.io. The site\'s own origin is always allowed.', 'rt-gate' ); ?></p>
+						</td>
+					</tr>
+				</table>
+
+				<h2><?php echo esc_html__( 'Webhook Settings', 'rt-gate' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><label for="rtg_webhook_url"><?php echo esc_html__( 'Webhook URL', 'rt-gate' ); ?></label></th>
+						<td><input id="rtg_webhook_url" name="webhook_url" type="url" class="large-text" value="<?php echo esc_attr( $webhook_url ); ?>" placeholder="https://" /></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="rtg_webhook_secret"><?php echo esc_html__( 'Webhook Secret', 'rt-gate' ); ?></label></th>
+						<td>
+							<input id="rtg_webhook_secret" name="webhook_secret" type="password" class="regular-text" value="<?php echo esc_attr( $webhook_secret ); ?>" autocomplete="off" />
+							<p class="description"><?php echo esc_html__( 'Used to sign webhook payloads with HMAC-SHA256.', 'rt-gate' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php echo esc_html__( 'Webhook Events', 'rt-gate' ); ?></th>
+						<td>
+							<?php
+							$all_webhook_events = array( 'form_submit', 'asset_access', 'asset_event' );
+							foreach ( $all_webhook_events as $event_key ) :
+								?>
+								<label style="display:block; margin-bottom:6px;">
+									<input type="checkbox" name="webhook_events[]" value="<?php echo esc_attr( $event_key ); ?>" <?php checked( in_array( $event_key, $webhook_events, true ) ); ?> />
+									<?php echo esc_html( $event_key ); ?>
+								</label>
+							<?php endforeach; ?>
+						</td>
+					</tr>
+				</table>
+
+				<?php submit_button( esc_html__( 'Save Settings', 'rt-gate' ) ); ?>
+			</form>
 		</div>
 		<?php
 	}

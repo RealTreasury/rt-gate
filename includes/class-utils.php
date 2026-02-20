@@ -72,4 +72,30 @@ class RTG_Utils {
 		$normalized_user_agent = sanitize_text_field( (string) $user_agent );
 		return self::hash_value( $normalized_user_agent );
 	}
+
+	/**
+	 * Get the current request IP address.
+	 *
+	 * @return string
+	 */
+	public static function get_request_ip() {
+		if ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
+			return sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
+		}
+
+		return '';
+	}
+
+	/**
+	 * Get the current request user agent.
+	 *
+	 * @return string
+	 */
+	public static function get_user_agent() {
+		if ( ! empty( $_SERVER['HTTP_USER_AGENT'] ) ) {
+			return sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) );
+		}
+
+		return '';
+	}
 }

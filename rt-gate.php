@@ -41,3 +41,21 @@ foreach ( $rtg_includes as $rtg_include ) {
 }
 
 register_activation_hook( RTG_PLUGIN_FILE, array( 'RTG_DB', 'install' ) );
+
+/**
+ * Schedule daily expired token cleanup on activation.
+ */
+register_activation_hook( RTG_PLUGIN_FILE, function () {
+	if ( ! wp_next_scheduled( 'rtg_cleanup_expired_tokens' ) ) {
+		wp_schedule_event( time(), 'daily', 'rtg_cleanup_expired_tokens' );
+	}
+} );
+
+/**
+ * Clear scheduled cleanup on deactivation.
+ */
+register_deactivation_hook( RTG_PLUGIN_FILE, function () {
+	wp_clear_scheduled_hook( 'rtg_cleanup_expired_tokens' );
+} );
+
+add_action( 'rtg_cleanup_expired_tokens', array( 'RTG_Token', 'cleanup_expired' ) );
