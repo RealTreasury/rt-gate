@@ -128,10 +128,17 @@ class RTG_Admin {
 		$table = $wpdb->prefix . 'rtg_forms';
 		$id    = isset( $_POST['id'] ) ? absint( wp_unslash( $_POST['id'] ) ) : 0;
 
+		$privacy_policy_url = self::get_privacy_policy_url();
+		$consent_text       = sprintf(
+			/* translators: %s: Privacy policy URL. */
+			__( 'I agree to receive updates and accept the privacy policy: %s', 'rt-gate' ),
+			$privacy_policy_url
+		);
+
 		$data = array(
 			'name'          => isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '',
 			'fields_schema' => isset( $_POST['fields_schema'] ) ? sanitize_text_field( wp_unslash( $_POST['fields_schema'] ) ) : '',
-			'consent_text'  => isset( $_POST['consent_text'] ) ? sanitize_text_field( wp_unslash( $_POST['consent_text'] ) ) : '',
+			'consent_text'  => sanitize_text_field( $consent_text ),
 		);
 
 		if ( $id > 0 ) {
@@ -142,6 +149,21 @@ class RTG_Admin {
 
 		wp_safe_redirect( admin_url( 'admin.php?page=rtg-forms&rtg_notice=' . rawurlencode( 'Form saved.' ) ) );
 		exit;
+	}
+
+	/**
+	 * Resolve the site privacy policy URL with a sensible fallback.
+	 *
+	 * @return string
+	 */
+	private static function get_privacy_policy_url() {
+		$privacy_url = function_exists( 'get_privacy_policy_url' ) ? get_privacy_policy_url() : '';
+
+		if ( empty( $privacy_url ) ) {
+			$privacy_url = home_url( '/privacy-policy/' );
+		}
+
+		return esc_url_raw( $privacy_url );
 	}
 
 	/**
@@ -340,12 +362,20 @@ class RTG_Admin {
 			<div class="rtg-card">
 				<h2><?php echo esc_html__( 'No-code form builder guide', 'rt-gate' ); ?></h2>
 				<ol class="rtg-helper-list">
-					<li><?php echo esc_html__( 'Enter a form name and consent text.', 'rt-gate' ); ?></li>
+					<li><?php echo esc_html__( 'Enter a form name. Standard consent text is applied automatically.', 'rt-gate' ); ?></li>
 					<li><?php echo esc_html__( 'Use the Field Builder to add your form fields.', 'rt-gate' ); ?></li>
 					<li><?php echo esc_html__( 'Click “Apply Fields to JSON” to generate a valid schema automatically.', 'rt-gate' ); ?></li>
 					<li><?php echo esc_html__( 'Save the form, then map it to one or more assets on the Mappings tab.', 'rt-gate' ); ?></li>
 				</ol>
 			</div>
+			<?php
+			$privacy_policy_url = self::get_privacy_policy_url();
+			$standard_consent   = sprintf(
+				/* translators: %s: Privacy policy URL. */
+				esc_html__( 'I agree to receive updates and accept the privacy policy: %s', 'rt-gate' ),
+				esc_url( $privacy_policy_url )
+			);
+			?>
 
 			<form method="post">
 				<input type="hidden" name="rtg_action" value="save_form" />
@@ -360,8 +390,14 @@ class RTG_Admin {
 								<td><input id="rtg_form_name" name="name" type="text" class="regular-text" value="<?php echo esc_attr( $record ? $record->name : '' ); ?>" required /></td>
 							</tr>
 							<tr>
-								<th scope="row"><label for="rtg_consent_text"><?php echo esc_html__( 'Consent Text', 'rt-gate' ); ?></label></th>
-								<td><textarea id="rtg_consent_text" name="consent_text" rows="5" class="large-text" placeholder="<?php echo esc_attr__( 'Example: I agree to receive updates and accept the privacy policy.', 'rt-gate' ); ?>"><?php echo esc_html( $record ? $record->consent_text : '' ); ?></textarea></td>
+								<th scope="row"><?php echo esc_html__( 'Consent', 'rt-gate' ); ?></th>
+								<td>
+									<p><?php echo esc_html( $standard_consent ); ?></p>
+									<p class="description">
+										<?php echo esc_html__( 'This text is automatically used for every form.', 'rt-gate' ); ?>
+										<a href="<?php echo esc_url( $privacy_policy_url ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html__( 'Review Privacy Policy', 'rt-gate' ); ?></a>
+									</p>
+								</td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="rtg_fields_schema"><?php echo esc_html__( 'Fields Schema (JSON)', 'rt-gate' ); ?></label></th>
