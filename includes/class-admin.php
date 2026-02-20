@@ -391,15 +391,16 @@ class RTG_Admin {
 						</div>
 						<table class="widefat striped rtg-form-builder-table" id="rtg_field_builder_table">
 							<thead>
-								<tr>
-									<th><?php echo esc_html__( 'Label', 'rt-gate' ); ?></th>
-									<th><?php echo esc_html__( 'Key', 'rt-gate' ); ?></th>
-									<th><?php echo esc_html__( 'Type', 'rt-gate' ); ?></th>
-									<th><?php echo esc_html__( 'Required', 'rt-gate' ); ?></th>
-									<th><?php echo esc_html__( 'Placeholder / Options', 'rt-gate' ); ?></th>
-									<th><?php echo esc_html__( 'Reorder', 'rt-gate' ); ?></th>
-									<th><?php echo esc_html__( 'Remove', 'rt-gate' ); ?></th>
-								</tr>
+							<tr>
+								<th><?php echo esc_html__( 'Label', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Key', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Type', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Required', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Autocomplete', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Placeholder / Options', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Reorder', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Remove', 'rt-gate' ); ?></th>
+							</tr>
 							</thead>
 							<tbody id="rtg_field_builder_rows"></tbody>
 						</table>
@@ -410,6 +411,7 @@ class RTG_Admin {
 						</div>
 						<p class="description"><?php echo esc_html__( 'Available field types: text, email, tel, company, textarea, select, radio, checkbox, url, number, date.', 'rt-gate' ); ?></p>
 						<p class="description"><?php echo esc_html__( 'For select/radio/checkbox fields, enter options as comma-separated values (example: Investor, Advisor, Other).', 'rt-gate' ); ?></p>
+						<p class="description"><?php echo esc_html__( 'Autocomplete controls browser autofill behavior for each field.', 'rt-gate' ); ?></p>
 						<p class="rtg-builder-status" id="rtg_builder_status" aria-live="polite"></p>
 					</div>
 				</div>
@@ -488,6 +490,7 @@ class RTG_Admin {
 						var defaults = field || {};
 						var selectedType = defaults.type || 'text';
 						var extraValue = (defaults.placeholder || (defaults.options ? defaults.options.join(', ') : '')) || '';
+						var autocompleteEnabled = defaults.autocomplete !== false;
 						var row = document.createElement('tr');
 						row.innerHTML =
 							'<td><input type="text" class="rtg-f-label" value="' + (defaults.label || '') + '" placeholder="Full Name" /></td>' +
@@ -500,6 +503,7 @@ class RTG_Admin {
 								'</select>' +
 							'</td>' +
 							'<td><label><input type="checkbox" class="rtg-f-required"' + (defaults.required ? ' checked' : '') + ' /> <?php echo esc_js( __( 'Yes', 'rt-gate' ) ); ?></label></td>' +
+							'<td><label><input type="checkbox" class="rtg-f-autocomplete"' + (autocompleteEnabled ? ' checked' : '') + ' /> <?php echo esc_js( __( 'Allow', 'rt-gate' ) ); ?></label></td>' +
 							'<td><input type="text" class="rtg-f-extra" value="' + extraValue + '" placeholder="Enter placeholder or options" /><small class="rtg-f-extra-help">' + (fieldTypeHelp[selectedType] || '') + '</small></td>' +
 							'<td><button type="button" class="button-link rtg-move-up">↑</button> <button type="button" class="button-link rtg-move-down">↓</button></td>' +
 							'<td><button type="button" class="button-link-delete rtg-remove-row"><?php echo esc_js( __( 'Remove', 'rt-gate' ) ); ?></button></td>';
@@ -519,6 +523,7 @@ class RTG_Admin {
 							var keyInput = row.querySelector('.rtg-f-key');
 							var type = row.querySelector('.rtg-f-type').value;
 							var required = row.querySelector('.rtg-f-required').checked;
+							var autocomplete = row.querySelector('.rtg-f-autocomplete').checked;
 							var extra = row.querySelector('.rtg-f-extra').value.trim();
 
 							if (!label) {
@@ -545,7 +550,8 @@ class RTG_Admin {
 								key: key,
 								label: label,
 								type: type,
-								required: required
+								required: required,
+								autocomplete: autocomplete
 							};
 
 							if (['select', 'radio', 'checkbox'].indexOf(type) !== -1 && extra) {
