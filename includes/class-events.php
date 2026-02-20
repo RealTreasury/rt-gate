@@ -55,7 +55,7 @@ class RTG_Events {
 	 */
 	public static function register_submenu() {
 		add_submenu_page(
-			'rtg-forms',
+			'rtg-dashboard',
 			esc_html__( 'Events', 'rt-gate' ),
 			esc_html__( 'Events', 'rt-gate' ),
 			'manage_options',
@@ -203,9 +203,17 @@ class RTG_Events {
 			$params[]    = gmdate( 'Y-m-d 23:59:59', strtotime( $date_to ) );
 		}
 
-		$sql = "SELECT e.id, e.form_id, e.asset_id, e.event_type, e.meta, e.created_at, COALESCE(l.email, '') AS email
+		$forms_table  = $wpdb->prefix . 'rtg_forms';
+		$assets_table = $wpdb->prefix . 'rtg_assets';
+
+		$sql = "SELECT e.id, e.form_id, e.asset_id, e.event_type, e.meta, e.created_at,
+				COALESCE(l.email, '') AS email,
+				COALESCE(f.name, '') AS form_name,
+				COALESCE(a.name, '') AS asset_name
 			FROM {$events_table} e
 			LEFT JOIN {$leads_table} l ON l.id = e.lead_id
+			LEFT JOIN {$forms_table} f ON f.id = e.form_id
+			LEFT JOIN {$assets_table} a ON a.id = e.asset_id
 			WHERE " . implode( ' AND ', $where_sql ) . ' ORDER BY e.id DESC';
 
 		if ( $limit > 0 ) {
@@ -225,33 +233,76 @@ class RTG_Events {
 	 * @return int
 	 */
 	public static function count_events() {
-		return count( self::query_events( -1, 0 ) );
+		global $wpdb;
+
+		$events_table = $wpdb->prefix . 'rtg_events';
+		$leads_table  = $wpdb->prefix . 'rtg_leads';
+		$where_sql    = array( '1=1' );
+		$params       = array();
+
+		$form_id = isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0;
+		if ( $form_id > 0 ) {
+			$where_sql[] = 'e.form_id = %d';
+			$params[]    = $form_id;
+		}
+
+		$asset_id = isset( $_GET['asset_id'] ) ? absint( wp_unslash( $_GET['asset_id'] ) ) : 0;
+		if ( $asset_id > 0 ) {
+			$where_sql[] = 'e.asset_id = %d';
+			$params[]    = $asset_id;
+		}
+
+		$event_type = isset( $_GET['event_type'] ) ? sanitize_key( wp_unslash( $_GET['event_type'] ) ) : '';
+		if ( ! empty( $event_type ) ) {
+			$where_sql[] = 'e.event_type = %s';
+			$params[]    = $event_type;
+		}
+
+		$email = isset( $_REQUEST['s'] ) ? sanitize_email( wp_unslash( $_REQUEST['s'] ) ) : '';
+		if ( ! empty( $email ) ) {
+			$where_sql[] = 'l.email LIKE %s';
+			$params[]    = '%' . $wpdb->esc_like( $email ) . '%';
+		}
+
+		$date_from = isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '';
+		if ( ! empty( $date_from ) ) {
+			$where_sql[] = 'e.created_at >= %s';
+			$params[]    = gmdate( 'Y-m-d 00:00:00', strtotime( $date_from ) );
+		}
+
+		$date_to = isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '';
+		if ( ! empty( $date_to ) ) {
+			$where_sql[] = 'e.created_at <= %s';
+			$params[]    = gmdate( 'Y-m-d 23:59:59', strtotime( $date_to ) );
+		}
+
+		$sql = "SELECT COUNT(*) FROM {$events_table} e
+			LEFT JOIN {$leads_table} l ON l.id = e.lead_id
+			WHERE " . implode( ' AND ', $where_sql );
+
+		if ( empty( $params ) ) {
+			return (int) $wpdb->get_var( $sql );
+		}
+
+		return (int) $wpdb->get_var( $wpdb->prepare( $sql, $params ) );
 	}
 
 	/**
-	 * Get requester IP.
+	 * Get requester IP via centralized utility.
 	 *
 	 * @return string
 	 */
 	private static function get_request_ip() {
-		if ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-			return sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
-		}
-
-		return '';
+		return RTG_Utils::get_request_ip();
 	}
 
 	/**
-	 * Get requester user agent.
+	 * Get requester user agent via centralized utility.
 	 *
 	 * @return string
 	 */
 	private static function get_user_agent() {
-		if ( ! empty( $_SERVER['HTTP_USER_AGENT'] ) ) {
-			return sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) );
-		}
-
-		return '';
+		return RTG_Utils::get_user_agent();
 	}
 }
 
@@ -309,12 +360,64 @@ if ( class_exists( 'WP_List_Table' ) ) {
 		 * @param string $column_name Column key.
 		 * @return string
 		 */
+		/**
+		 * Render dropdown filters above the table.
+		 *
+		 * @param string $which Top or bottom.
+		 * @return void
+		 */
+		protected function extra_tablenav( $which ) {
+			if ( 'top' !== $which ) {
+				return;
+			}
+
+			global $wpdb;
+			$forms  = $wpdb->get_results( "SELECT id, name FROM {$wpdb->prefix}rtg_forms ORDER BY name ASC" );
+			$assets = $wpdb->get_results( "SELECT id, name FROM {$wpdb->prefix}rtg_assets ORDER BY name ASC" );
+
+			$current_form_id    = isset( $_GET['form_id'] ) ? absint( $_GET['form_id'] ) : 0;
+			$current_asset_id   = isset( $_GET['asset_id'] ) ? absint( $_GET['asset_id'] ) : 0;
+			$current_event_type = isset( $_GET['event_type'] ) ? sanitize_key( $_GET['event_type'] ) : '';
+
+			$event_types = array( 'form_submit', 'page_view', 'download_click', 'video_play', 'video_progress' );
+			?>
+			<div class="rtg-events-filters">
+				<select name="form_id">
+					<option value=""><?php echo esc_html__( 'All Forms', 'rt-gate' ); ?></option>
+					<?php foreach ( $forms as $form ) : ?>
+						<option value="<?php echo esc_attr( $form->id ); ?>" <?php selected( $current_form_id, (int) $form->id ); ?>><?php echo esc_html( $form->name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+
+				<select name="asset_id">
+					<option value=""><?php echo esc_html__( 'All Assets', 'rt-gate' ); ?></option>
+					<?php foreach ( $assets as $asset ) : ?>
+						<option value="<?php echo esc_attr( $asset->id ); ?>" <?php selected( $current_asset_id, (int) $asset->id ); ?>><?php echo esc_html( $asset->name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+
+				<select name="event_type">
+					<option value=""><?php echo esc_html__( 'All Event Types', 'rt-gate' ); ?></option>
+					<?php foreach ( $event_types as $etype ) : ?>
+						<option value="<?php echo esc_attr( $etype ); ?>" <?php selected( $current_event_type, $etype ); ?>><?php echo esc_html( $etype ); ?></option>
+					<?php endforeach; ?>
+				</select>
+
+				<?php submit_button( esc_html__( 'Filter', 'rt-gate' ), '', '', false ); ?>
+			</div>
+			<?php
+		}
+
 		public function column_default( $item, $column_name ) {
 			switch ( $column_name ) {
 				case 'id':
+					return (string) absint( $item->id );
 				case 'form_id':
+					$name = ! empty( $item->form_name ) ? $item->form_name : '#' . absint( $item->form_id );
+					return esc_html( $name );
 				case 'asset_id':
-					return (string) absint( $item->$column_name );
+					$name = ! empty( $item->asset_name ) ? $item->asset_name : '#' . absint( $item->asset_id );
+					return esc_html( $name );
 				case 'email':
 				case 'event_type':
 					return esc_html( (string) $item->$column_name );

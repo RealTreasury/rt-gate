@@ -41,6 +41,21 @@ class RTG_REST {
 				'methods'             => 'POST',
 				'callback'            => array( __CLASS__, 'handle_submit' ),
 				'permission_callback' => '__return_true',
+				'args'                => array(
+					'form_id' => array(
+						'required'          => true,
+						'type'              => 'integer',
+						'sanitize_callback' => 'absint',
+					),
+					'fields'  => array(
+						'required' => true,
+						'type'     => 'object',
+					),
+					'consent' => array(
+						'required' => true,
+						'type'     => 'boolean',
+					),
+				),
 			)
 		);
 
@@ -51,6 +66,18 @@ class RTG_REST {
 				'methods'             => 'POST',
 				'callback'            => array( __CLASS__, 'handle_validate' ),
 				'permission_callback' => '__return_true',
+				'args'                => array(
+					'token'      => array(
+						'required'          => true,
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'asset_slug' => array(
+						'required'          => true,
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_title',
+					),
+				),
 			)
 		);
 
@@ -61,6 +88,28 @@ class RTG_REST {
 				'methods'             => 'POST',
 				'callback'            => array( __CLASS__, 'handle_event' ),
 				'permission_callback' => '__return_true',
+				'args'                => array(
+					'token'      => array(
+						'required'          => true,
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'asset_slug' => array(
+						'required'          => true,
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_title',
+					),
+					'event_type' => array(
+						'required'          => true,
+						'type'              => 'string',
+						'enum'              => array( 'page_view', 'download_click', 'video_play', 'video_progress' ),
+					),
+					'meta'       => array(
+						'required' => false,
+						'type'     => 'object',
+						'default'  => array(),
+					),
+				),
 			)
 		);
 	}
@@ -111,7 +160,7 @@ class RTG_REST {
 
 		$host = wp_parse_url( $origin, PHP_URL_HOST );
 
-		if ( empty( $host ) || ! self::is_allowed_github_io_host( $host ) ) {
+		if ( empty( $host ) || ! self::is_allowed_origin( $host ) ) {
 			return $served;
 		}
 
@@ -233,8 +282,12 @@ class RTG_REST {
 			);
 		}
 
+		$rtg_settings   = get_option( 'rtg_settings', array() );
+		$ttl_minutes    = isset( $rtg_settings['token_ttl_minutes'] ) ? absint( $rtg_settings['token_ttl_minutes'] ) : 60;
+		$ttl_seconds    = max( 60, $ttl_minutes * 60 );
+
 		foreach ( $mapped_assets as $mapped_asset ) {
-			$token_data = RTG_Token::issue_token( $lead_id, (int) $mapped_asset->asset_id );
+			$token_data = RTG_Token::issue_token( $lead_id, (int) $mapped_asset->asset_id, $ttl_seconds );
 			if ( is_wp_error( $token_data ) ) {
 				continue;
 			}
@@ -426,45 +479,60 @@ class RTG_REST {
 	}
 
 	/**
-	 * Get requester IP.
+	 * Get requester IP via centralized utility.
 	 *
 	 * @return string
 	 */
 	private static function get_request_ip() {
-		if ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-			return sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
-		}
-
-		return '';
+		return RTG_Utils::get_request_ip();
 	}
 
 	/**
-	 * Get requester user agent.
+	 * Get requester user agent via centralized utility.
 	 *
 	 * @return string
 	 */
 	private static function get_user_agent() {
-		if ( ! empty( $_SERVER['HTTP_USER_AGENT'] ) ) {
-			return sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) );
-		}
-
-		return '';
+		return RTG_Utils::get_user_agent();
 	}
 
 	/**
-	 * Check if host is github.io or subdomain.
+	 * Check if a host is in the allowed origins list.
+	 *
+	 * Checks the configurable allowed origins from settings, falling back
+	 * to github.io if none configured. The site's own host is always allowed.
 	 *
 	 * @param string $host Host name.
 	 * @return bool
 	 */
-	private static function is_allowed_github_io_host( $host ) {
+	private static function is_allowed_origin( $host ) {
 		$host = strtolower( (string) $host );
 
-		if ( 'github.io' === $host ) {
+		// Always allow the site's own host.
+		$site_host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+		if ( ! empty( $site_host ) && $host === $site_host ) {
 			return true;
 		}
 
-		return strlen( $host ) > 10 && 0 === substr_compare( $host, '.github.io', -10 );
+		$rtg_settings    = get_option( 'rtg_settings', array() );
+		$origins_raw     = isset( $rtg_settings['allowed_origins'] ) ? (string) $rtg_settings['allowed_origins'] : '';
+		$origins         = array_filter( array_map( 'trim', explode( "\n", strtolower( $origins_raw ) ) ) );
+
+		if ( empty( $origins ) ) {
+			$origins = array( 'github.io' );
+		}
+
+		foreach ( $origins as $allowed ) {
+			if ( $host === $allowed ) {
+				return true;
+			}
+			$suffix = '.' . $allowed;
+			if ( strlen( $host ) > strlen( $suffix ) && substr_compare( $host, $suffix, -strlen( $suffix ) ) === 0 ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

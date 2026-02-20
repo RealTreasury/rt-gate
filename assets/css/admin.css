@@ -1,0 +1,163 @@
+/**
+ * Real Treasury Gate — Admin Styles
+ */
+
+/* ── Form builder grid ───────────────────────────────── */
+.rtg-form-builder-grid {
+	display: grid;
+	gap: 20px;
+	grid-template-columns: minmax(520px, 1.35fr) minmax(780px, 2fr);
+	margin: 16px 0 8px;
+	align-items: start;
+}
+
+/* ── Card component ──────────────────────────────────── */
+.rtg-card {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 8px;
+	padding: 20px;
+}
+
+.rtg-card h2,
+.rtg-card h3 {
+	margin-top: 0;
+}
+
+/* ── Form builder table ──────────────────────────────── */
+.rtg-form-builder-table td {
+	vertical-align: top;
+	padding: 10px 8px;
+}
+
+.rtg-form-builder-table th {
+	padding: 10px 8px;
+	white-space: nowrap;
+}
+
+.rtg-form-builder-table input,
+.rtg-form-builder-table select {
+	width: 100%;
+	min-width: 120px;
+}
+
+.rtg-form-builder-table .button {
+	white-space: nowrap;
+}
+
+.rtg-form-builder-table {
+	table-layout: auto;
+}
+
+.rtg-form-builder-scroller {
+	overflow-x: auto;
+	padding-bottom: 4px;
+}
+
+/* ── Form builder actions ────────────────────────────── */
+.rtg-form-builder-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.rtg-form-builder-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+.rtg-form-builder-presets select {
+	min-width: 220px;
+}
+
+.rtg-builder-status {
+	margin-top: 10px;
+	font-style: italic;
+}
+
+.rtg-f-extra-help {
+	display: block;
+	margin-top: 4px;
+	color: #646970;
+	font-size: 12px;
+}
+
+.rtg-helper-list {
+	list-style: decimal;
+	padding-left: 18px;
+}
+
+/* ── Dashboard cards ─────────────────────────────────── */
+.rtg-dashboard-grid {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+	margin: 16px 0;
+}
+
+.rtg-stat-card {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 8px;
+	padding: 20px;
+	text-align: center;
+}
+
+.rtg-stat-card .rtg-stat-number {
+	font-size: 32px;
+	font-weight: 600;
+	color: #1d2327;
+	display: block;
+	margin-bottom: 4px;
+}
+
+.rtg-stat-card .rtg-stat-label {
+	font-size: 13px;
+	color: #646970;
+}
+
+.rtg-stat-card a {
+	text-decoration: none;
+	color: inherit;
+}
+
+.rtg-stat-card a:hover .rtg-stat-number {
+	color: #2271b1;
+}
+
+/* ── Events filter bar ───────────────────────────────── */
+.rtg-events-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+.rtg-events-filters select {
+	min-width: 140px;
+}
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 1400px) {
+	.rtg-form-builder-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 782px) {
+	.rtg-card {
+		padding: 16px;
+	}
+
+	.rtg-form-builder-table th,
+	.rtg-form-builder-table td {
+		padding: 8px 6px;
+	}
+
+	.rtg-dashboard-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
