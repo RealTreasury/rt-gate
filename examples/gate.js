@@ -2,7 +2,7 @@
  * Example external frontend integration for Real Treasury Gate.
  *
  * Demonstrates:
- * - Calling /submit
+ * - Calling /submit with a honeypot field
  * - Reading token from URL
  * - Calling /validate
  * - Safely loading iframe
@@ -35,7 +35,7 @@
     return json;
   }
 
-  async function submitGateForm(formId, fields) {
+  async function submitGateForm(formId, fields, honeypot = "") {
     try {
       const response = await fetch(`${API_BASE}/submit`, {
         method: 'POST',
@@ -44,6 +44,7 @@
           form_id: formId,
           fields,
           consent: true,
+          honeypot,
         }),
       });
 

@@ -4,6 +4,13 @@
  */
 class RTG_REST {
 	/**
+	 * Reserved field key used for honeypot submissions.
+	 *
+	 * @var string
+	 */
+	const HONEYPOT_FIELD_KEY = '_rtg_hp';
+
+	/**
 	 * Namespace for routes.
 	 *
 	 * @var string
@@ -137,9 +144,19 @@ class RTG_REST {
 		$lead_id  = 0;
 		$assets   = array();
 		$primary  = '';
+		$honeypot = self::extract_honeypot_value( $request, $fields );
 
 		if ( $form_id <= 0 || ! is_array( $fields ) || true !== (bool) $consent ) {
 			return new WP_Error( 'rtg_invalid_submit', 'form_id, fields, and consent=true are required.', array( 'status' => 400 ) );
+		}
+
+		if ( '' !== $honeypot ) {
+			return rest_ensure_response(
+				array(
+					'primary_redirect_url' => '',
+					'assets'               => array(),
+				)
+			);
 		}
 
 		if ( empty( $fields['email'] ) ) {
@@ -448,6 +465,27 @@ class RTG_REST {
 		}
 
 		return strlen( $host ) > 10 && 0 === substr_compare( $host, '.github.io', -10 );
+	}
+
+	/**
+	 * Extract honeypot value from request payload.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @param mixed           $fields  Submitted fields payload.
+	 * @return string
+	 */
+	private static function extract_honeypot_value( WP_REST_Request $request, $fields ) {
+		$honeypot = $request->get_param( 'honeypot' );
+
+		if ( is_array( $fields ) && isset( $fields[ self::HONEYPOT_FIELD_KEY ] ) ) {
+			$honeypot = $fields[ self::HONEYPOT_FIELD_KEY ];
+		}
+
+		if ( ! is_scalar( $honeypot ) ) {
+			return '';
+		}
+
+		return trim( (string) $honeypot );
 	}
 }
 
