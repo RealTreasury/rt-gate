@@ -55,6 +55,10 @@ class RTG_Admin {
 			'rtg-mappings',
 			array( __CLASS__, 'render_mappings_page' )
 		);
+
+		if ( class_exists( 'RTG_Events' ) ) {
+			RTG_Events::register_submenu();
+		}
 	}
 
 	/**
