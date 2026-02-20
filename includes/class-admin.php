@@ -387,6 +387,7 @@ class RTG_Admin {
 							<button type="button" class="button" id="rtg_add_email_field"><?php echo esc_html__( 'Quick Add Email', 'rt-gate' ); ?></button>
 							<button type="button" class="button" id="rtg_add_name_field"><?php echo esc_html__( 'Quick Add Name', 'rt-gate' ); ?></button>
 							<button type="button" class="button" id="rtg_add_phone_field"><?php echo esc_html__( 'Quick Add Phone', 'rt-gate' ); ?></button>
+							<button type="button" class="button" id="rtg_add_user_type_field"><?php echo esc_html__( 'Quick Add User Type', 'rt-gate' ); ?></button>
 						</div>
 						<table class="widefat striped rtg-form-builder-table" id="rtg_field_builder_table">
 							<thead>
@@ -427,6 +428,14 @@ class RTG_Admin {
 					var quickEmailButton = document.getElementById('rtg_add_email_field');
 					var quickNameButton = document.getElementById('rtg_add_name_field');
 					var quickPhoneButton = document.getElementById('rtg_add_phone_field');
+					var quickUserTypeButton = document.getElementById('rtg_add_user_type_field');
+					var userTypeOptions = [
+						'Corporate treasury practitioner',
+						'Consultant',
+						'Tech vendor',
+						'Finance',
+						'Other'
+					];
 
 					if (!rowsContainer || !jsonTextarea || !addButton || !loadButton || !applyButton) {
 						return;
@@ -671,6 +680,19 @@ class RTG_Admin {
 						quickPhoneButton.addEventListener('click', function () {
 							createFieldRow({ type: 'tel', label: 'Phone Number', key: 'phone', required: false });
 							setStatus('Quick phone field added.');
+						});
+					}
+
+					if (quickUserTypeButton) {
+						quickUserTypeButton.addEventListener('click', function () {
+							createFieldRow({
+								type: 'select',
+								label: 'Type of User',
+								key: 'user_type',
+								required: true,
+								options: userTypeOptions
+							});
+							setStatus('Quick user type dropdown added.');
 						});
 					}
 
