@@ -1,0 +1,167 @@
+# Admin UI
+
+This document describes the custom WordPress admin screens provided by Real Treasury Gate and the `WP_List_Table`-based events view.
+
+## Menu structure
+
+Top-level menu:
+- **Real Treasury Gate** (`admin.php?page=rtg-forms`)
+
+Submenus:
+- **Forms** (`rtg-forms`)
+- **Assets** (`rtg-assets`)
+- **Mappings** (`rtg-mappings`)
+- **Events** (`rtg-events`, registered by `RTG_Events::register_submenu()`)
+
+Source:
+- `includes/class-admin.php`
+- `includes/class-events.php`
+
+## Capability model
+
+All admin screens and form handlers require:
+- `current_user_can( 'manage_options' )`
+
+This applies to:
+- Menu visibility
+- CRUD handlers in `RTG_Admin::handle_form_actions()`
+- Events CSV export in `RTG_Events::handle_admin_actions()`
+
+## Forms screen (`rtg-forms`)
+
+Renderer:
+- `RTG_Admin::render_forms_page()`
+
+Features:
+- Create/update a form record in `rtg_forms`
+- Edit existing form by passing `edit_id`
+- List existing forms (`id`, `name`, `created_at`)
+
+Editable fields:
+- `name`
+- `fields_schema` (JSON-as-text)
+- `consent_text`
+
+Handler path:
+- POST `rtg_action=save_form`
+- Nonce action: `rtg_save_form`
+- Save method: `RTG_Admin::save_form()`
+
+## Assets screen (`rtg-assets`)
+
+Renderer:
+- `RTG_Admin::render_assets_page()`
+
+Features:
+- Create/update asset records in `rtg_assets`
+- Edit existing asset by `edit_id`
+- List existing assets (`id`, `name`, `slug`, `type`, `created_at`)
+
+Editable fields:
+- `name`
+- `slug`
+- `type`
+- `config` (JSON-as-text)
+
+Handler path:
+- POST `rtg_action=save_asset`
+- Nonce action: `rtg_save_asset`
+- Save method: `RTG_Admin::save_asset()`
+
+## Mappings screen (`rtg-mappings`)
+
+Renderer:
+- `RTG_Admin::render_mappings_page()`
+
+Features:
+- Create/update mappings in `rtg_mappings`
+- Select form and asset from current records
+- Configure `iframe_src_template`
+- List mappings with joined form/asset names
+
+Editable fields:
+- `form_id`
+- `asset_id`
+- `iframe_src_template`
+
+Handler path:
+- POST `rtg_action=save_mapping`
+- Nonce action: `rtg_save_mapping`
+- Save method: `RTG_Admin::save_mapping()`
+
+## Admin notices
+
+After create/update operations, a success notice is displayed via:
+- query arg: `rtg_notice`
+- renderer: `RTG_Admin::render_notice()`
+
+Redirect targets:
+- Forms: `admin.php?page=rtg-forms&rtg_notice=...`
+- Assets: `admin.php?page=rtg-assets&rtg_notice=...`
+- Mappings: `admin.php?page=rtg-mappings&rtg_notice=...`
+
+## Events screen (`rtg-events`)
+
+Main renderer:
+- `RTG_Events::render_admin_page()`
+
+The page instantiates `RTG_Events_List_Table` and renders:
+- Search box (email lookup)
+- Filter dropdowns and date inputs
+- Paginated event table
+- CSV export button
+
+## `WP_List_Table` implementation
+
+Class:
+- `RTG_Events_List_Table extends WP_List_Table`
+- Defined in `includes/class-events.php`
+
+Lifecycle:
+1. `prepare_items()` reads filters from `$_GET`
+2. Fetches rows via `RTG_Events::query_events( $per_page, $offset )`
+3. Counts rows via `RTG_Events::count_events()`
+4. Sets pagination args
+
+Columns:
+- `id`
+- `email`
+- `form_id`
+- `asset_id`
+- `event_type`
+- `meta`
+- `created_at`
+
+Filter controls (from `extra_tablenav`):
+- `form_id`
+- `asset_id`
+- `event_type`
+- `date_from`
+- `date_to`
+
+Search:
+- Uses default list-table search key `s`
+- `RTG_Events::query_events()` applies email `LIKE` filter against joined `rtg_leads.email`
+
+## CSV export flow
+
+Export action:
+- URL includes `rtg_action=export_events_csv`
+- Nonce action: `rtg_export_events_csv`
+
+Handler:
+- `RTG_Events::handle_admin_actions()` validates request + nonce
+- `RTG_Events::export_csv()` streams current filtered result set
+
+CSV columns:
+- `id,email,form_id,asset_id,event_type,meta,created_at`
+
+## Data lookup notes
+
+Events list queries:
+- Base table: `rtg_events`
+- Left join: `rtg_leads` (for email display/search)
+
+Event metadata:
+- Stored as JSON string in `meta`
+- Includes hashed request identifiers (`request_ip_hash`, `request_ua_hash`) from `RTG_Events::log_event()`
