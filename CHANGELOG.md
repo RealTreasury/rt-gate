@@ -6,3 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Initial repository scaffolding and deployment/documentation foundations.
+- Implemented `includes/class-token.php` with secure 32-byte token generation, SHA-256 token hashing for storage, and expiry validation helpers.
+- Implemented `includes/class-rest.php` registering `/wp-json/rtg/v1` endpoints for `/submit`, `/validate`, and `/event`.
+- Added transient-based REST rate limiting (10 requests/minute per hashed IP per route).
+- Added `rest_pre_serve_request` CORS allowlist behavior for `github.io` origins.
