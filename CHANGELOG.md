@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - v1.0.0
 
 ### Added
+- Added submit honeypot support (`honeypot` or `fields._rtg_hp`) so bot-like submissions return an empty payload without creating leads, issuing tokens, or logging events.
 - Initial repository scaffolding and deployment/documentation foundations.
 - Implemented `includes/class-token.php` with secure 32-byte token generation, SHA-256 token hashing for storage, and expiry validation helpers.
 - Implemented `includes/class-rest.php` registering `/wp-json/rtg/v1` endpoints for `/submit`, `/validate`, and `/event`.

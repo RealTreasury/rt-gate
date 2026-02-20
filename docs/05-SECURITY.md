@@ -109,3 +109,14 @@ Current constraints:
 - `/validate` returns only token validity + asset payload (no lead PII)
 - Lead table stores `ip_hash` and `ua_hash`, not raw values
 - Event metadata automatically appends hashed request IP/UA
+
+## 6) Bot mitigation with submit honeypot
+
+Source:
+- `includes/class-rest.php` (`RTG_REST::handle_submit`, `RTG_REST::extract_honeypot_value`)
+
+Mechanism:
+- `POST /submit` accepts an explicit `honeypot` value (or `fields._rtg_hp`).
+- Legitimate clients must keep the honeypot empty.
+- If honeypot is non-empty, the request is treated as likely bot traffic and returns an empty successful payload (`primary_redirect_url` empty and `assets` empty).
+- No lead upsert, token issuance, event logging, or webhook dispatch occurs for honeypot-triggered submissions.

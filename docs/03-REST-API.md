@@ -37,9 +37,17 @@ Create/update lead and issue per-asset tokenized redirect URLs.
     "first_name": "Ada",
     "company": "Example Co"
   },
-  "consent": true
+  "consent": true,
+  "honeypot": ""
 }
 ```
+
+### Honeypot behavior
+
+- Every submit payload must include a honeypot field and keep it empty (`"honeypot": ""` or `fields._rtg_hp = ""`).
+- Non-empty honeypot submissions are treated as bot traffic and receive an empty success payload with no issued tokens.
+
+
 
 Required fields:
 - `form_id` (integer > 0)
