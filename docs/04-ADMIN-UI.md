@@ -38,6 +38,8 @@ Features:
 - List existing forms (`id`, `name`, `created_at`)
 - Show an in-page “No-code form builder guide” for non-technical admins
 - Provide a visual Field Builder table that can generate `fields_schema` JSON automatically
+- Offer one-click field templates and quick-add controls for common field sets
+- Support field reordering with move up/down controls and inline status messaging
 
 Editable fields:
 - `name`
@@ -47,7 +49,12 @@ Editable fields:
 Field Builder controls:
 - Add/remove field rows
 - Configure `label`, `key`, `type`, `required`
+- Use expanded field types: `text`, `email`, `tel`, `company`, `textarea`, `select`, `radio`, `checkbox`, `url`, `number`, `date`
 - Set placeholder text (for text-like inputs) or comma-separated options (for select/radio/checkbox)
+- Insert starter templates (lead capture, webinar registration, download request)
+- Use quick-add buttons for common fields (email, name, phone)
+- Reorder rows with move up/down controls
+- Auto-sanitize generated keys and de-duplicate duplicate keys with numeric suffixes
 - Load existing JSON into the visual builder
 - Apply builder rows back to `fields_schema`
 
