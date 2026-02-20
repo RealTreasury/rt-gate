@@ -292,15 +292,16 @@ class RTG_Admin {
 				.rtg-form-builder-grid {
 					display: grid;
 					gap: 20px;
-					grid-template-columns: 1.4fr 1fr;
+					grid-template-columns: minmax(520px, 1.35fr) minmax(780px, 2fr);
 					margin: 16px 0 8px;
+					align-items: start;
 				}
 
 				.rtg-card {
 					background: #fff;
 					border: 1px solid #dcdcde;
 					border-radius: 8px;
-					padding: 16px;
+					padding: 20px;
 				}
 
 				.rtg-card h2,
@@ -309,12 +310,32 @@ class RTG_Admin {
 				}
 
 				.rtg-form-builder-table td {
-					vertical-align: middle;
+					vertical-align: top;
+					padding: 10px 8px;
+				}
+
+				.rtg-form-builder-table th {
+					padding: 10px 8px;
+					white-space: nowrap;
 				}
 
 				.rtg-form-builder-table input,
 				.rtg-form-builder-table select {
 					width: 100%;
+					min-width: 120px;
+				}
+
+				.rtg-form-builder-table .button {
+					white-space: nowrap;
+				}
+
+				.rtg-form-builder-table {
+					table-layout: auto;
+				}
+
+				.rtg-form-builder-scroller {
+					overflow-x: auto;
+					padding-bottom: 4px;
 				}
 
 				.rtg-form-builder-actions {
@@ -352,9 +373,20 @@ class RTG_Admin {
 					padding-left: 18px;
 				}
 
-				@media (max-width: 1080px) {
+				@media (max-width: 1400px) {
 					.rtg-form-builder-grid {
 						grid-template-columns: 1fr;
+					}
+				}
+
+				@media (max-width: 782px) {
+					.rtg-card {
+						padding: 16px;
+					}
+
+					.rtg-form-builder-table th,
+					.rtg-form-builder-table td {
+						padding: 8px 6px;
 					}
 				}
 			</style>
@@ -425,21 +457,23 @@ class RTG_Admin {
 							<button type="button" class="button" id="rtg_add_phone_field"><?php echo esc_html__( 'Quick Add Phone', 'rt-gate' ); ?></button>
 							<button type="button" class="button" id="rtg_add_user_type_field"><?php echo esc_html__( 'Quick Add User Type', 'rt-gate' ); ?></button>
 						</div>
-						<table class="widefat striped rtg-form-builder-table" id="rtg_field_builder_table">
-							<thead>
-							<tr>
-								<th><?php echo esc_html__( 'Label', 'rt-gate' ); ?></th>
-								<th><?php echo esc_html__( 'Key', 'rt-gate' ); ?></th>
-								<th><?php echo esc_html__( 'Type', 'rt-gate' ); ?></th>
-								<th><?php echo esc_html__( 'Required', 'rt-gate' ); ?></th>
-								<th><?php echo esc_html__( 'Autocomplete', 'rt-gate' ); ?></th>
-								<th><?php echo esc_html__( 'Placeholder / Options', 'rt-gate' ); ?></th>
-								<th><?php echo esc_html__( 'Reorder', 'rt-gate' ); ?></th>
-								<th><?php echo esc_html__( 'Remove', 'rt-gate' ); ?></th>
-							</tr>
-							</thead>
-							<tbody id="rtg_field_builder_rows"></tbody>
-						</table>
+						<div class="rtg-form-builder-scroller">
+							<table class="widefat striped rtg-form-builder-table" id="rtg_field_builder_table">
+								<thead>
+								<tr>
+									<th><?php echo esc_html__( 'Label', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Key', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Type', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Required', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Autocomplete', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Placeholder / Options', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Reorder', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Remove', 'rt-gate' ); ?></th>
+								</tr>
+								</thead>
+								<tbody id="rtg_field_builder_rows"></tbody>
+							</table>
+						</div>
 						<div class="rtg-form-builder-actions">
 							<button type="button" class="button" id="rtg_add_field_row"><?php echo esc_html__( 'Add Field', 'rt-gate' ); ?></button>
 							<button type="button" class="button button-secondary" id="rtg_load_from_json"><?php echo esc_html__( 'Load From JSON', 'rt-gate' ); ?></button>
