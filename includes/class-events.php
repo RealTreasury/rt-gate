@@ -98,6 +98,12 @@ class RTG_Events {
 
 		require_once ABSPATH . 'wp-admin/includes/class-wp-list-table.php';
 
+		if ( ! class_exists( 'RTG_Events_List_Table' ) ) {
+			echo '<div class="wrap"><h1>' . esc_html__( 'Events', 'rt-gate' ) . '</h1>';
+			echo '<p>' . esc_html__( 'Unable to load the events table. Please deactivate and reactivate the plugin.', 'rt-gate' ) . '</p></div>';
+			return;
+		}
+
 		$table = new RTG_Events_List_Table();
 		$table->prepare_items();
 		?>
@@ -217,7 +223,9 @@ class RTG_Events {
 			WHERE " . implode( ' AND ', $where_sql ) . ' ORDER BY e.id DESC';
 
 		if ( $limit > 0 ) {
-			$sql .= $wpdb->prepare( ' LIMIT %d OFFSET %d', absint( $limit ), absint( $offset ) );
+			$sql     .= ' LIMIT %d OFFSET %d';
+			$params[] = absint( $limit );
+			$params[] = absint( $offset );
 		}
 
 		if ( empty( $params ) ) {
@@ -342,7 +350,8 @@ if ( class_exists( 'WP_List_Table' ) ) {
 			$current_page = $this->get_pagenum();
 			$offset       = ( $current_page - 1 ) * $per_page;
 
-			$this->items = RTG_Events::query_events( $per_page, $offset );
+			$results     = RTG_Events::query_events( $per_page, $offset );
+			$this->items = is_array( $results ) ? $results : array();
 			$total_items = RTG_Events::count_events();
 
 			$this->set_pagination_args(
