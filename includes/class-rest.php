@@ -51,9 +51,14 @@ class RTG_REST {
 						'required' => true,
 						'type'     => 'object',
 					),
-					'consent' => array(
+					'consent'  => array(
 						'required' => true,
 						'type'     => 'boolean',
+					),
+					'gate_url' => array(
+						'required'          => false,
+						'type'              => 'string',
+						'sanitize_callback' => 'esc_url_raw',
 					),
 				),
 			)
@@ -211,6 +216,7 @@ class RTG_REST {
 		$assets   = array();
 		$primary  = '';
 		$honeypot = self::extract_honeypot_value( $request, $fields );
+		$gate_url = (string) $request->get_param( 'gate_url' );
 
 		if ( $form_id <= 0 || ! is_array( $fields ) || true !== (bool) $consent ) {
 			return new WP_Error( 'rtg_invalid_submit', 'form_id, fields, and consent=true are required.', array( 'status' => 400 ) );
@@ -309,14 +315,27 @@ class RTG_REST {
 				continue;
 			}
 
-			$redirect_url = str_replace(
-				array( '{asset_slug}', '{token}' ),
-				array( sanitize_title( $mapped_asset->slug ), rawurlencode( $token_data['token'] ) ),
-				(string) $mapped_asset->iframe_src_template
-			);
+			$asset_slug  = sanitize_title( $mapped_asset->slug );
+			$raw_token   = $token_data['token'];
+
+			if ( ! empty( $gate_url ) ) {
+				$redirect_url = self::append_query_params( $gate_url, array(
+					'asset' => $asset_slug,
+					't'     => $raw_token,
+				) );
+			} elseif ( ! empty( $mapped_asset->iframe_src_template ) ) {
+				$redirect_url = str_replace(
+					array( '{asset_slug}', '{token}' ),
+					array( $asset_slug, rawurlencode( $raw_token ) ),
+					(string) $mapped_asset->iframe_src_template
+				);
+			} else {
+				$redirect_url = '';
+			}
 
 			$asset_item = array(
 				'slug'         => (string) $mapped_asset->slug,
+				'token'        => $raw_token,
 				'redirect_url' => esc_url_raw( $redirect_url ),
 				'expires_at'   => $token_data['expires_at'],
 			);
@@ -605,6 +624,20 @@ class RTG_REST {
 		}
 
 		return trim( (string) $honeypot );
+	}
+
+	/**
+	 * Append query parameters to a URL, respecting existing query strings.
+	 *
+	 * @param string $url    Base URL.
+	 * @param array  $params Key-value pairs to append.
+	 * @return string
+	 */
+	private static function append_query_params( $url, array $params ) {
+		foreach ( $params as $key => $value ) {
+			$url = add_query_arg( rawurlencode( $key ), rawurlencode( $value ), $url );
+		}
+		return $url;
 	}
 }
 

@@ -84,7 +84,8 @@ Create/update lead and issue per-asset tokenized redirect URLs.
     "company": "Example Co"
   },
   "consent": true,
-  "honeypot": ""
+  "honeypot": "",
+  "gate_url": "https://example.com/gate/"
 }
 ```
 
@@ -101,20 +102,32 @@ Required fields:
 - `fields.email` (valid email)
 - `consent` (must evaluate to `true`)
 
+Optional fields:
+- `gate_url` (string, valid URL) — the gate page URL that the form is hosted on. When provided, each asset's `redirect_url` is built as `{gate_url}?asset={slug}&t={token}` (existing query-string parameters are preserved). This lets the same mapping work across multiple pages without changing `iframe_src_template` in WP Admin.
+
+### Redirect URL resolution order
+
+1. **`gate_url` provided in request** — redirect is `{gate_url}?asset={slug}&t={token}`.
+2. **`iframe_src_template` stored on the mapping** — placeholders `{asset_slug}` and `{token}` are substituted.
+3. **Neither present** — `redirect_url` is empty; the frontend can construct its own URL using the `token` and `slug` fields returned in each asset object.
+
 ### Success response (HTTP 200)
 
 ```json
 {
-  "primary_redirect_url": "https://<github-pages>/gate/asset-slug?t=<raw-token>",
+  "primary_redirect_url": "https://example.com/gate/?asset=asset-slug&t=<raw-token>",
   "assets": [
     {
       "slug": "asset-slug",
-      "redirect_url": "https://<github-pages>/gate/asset-slug?t=<raw-token>",
+      "token": "<raw-token>",
+      "redirect_url": "https://example.com/gate/?asset=asset-slug&t=<raw-token>",
       "expires_at": "2026-01-01 12:34:56"
     }
   ]
 }
 ```
+
+Each asset object always includes `slug` and `token`, so the frontend can build its own redirect if `redirect_url` is empty.
 
 ### Error responses
 
