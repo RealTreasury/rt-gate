@@ -69,6 +69,18 @@ Validate:
 - Events table filters (form/asset/email/event/date).
 - CSV export works with nonce protection.
 
+### Query parity QA script (no test harness fallback)
+
+If PHPUnit/integration harness is not available, run:
+
+- `wp eval-file examples/qa/query-parity.php`
+
+This validates:
+
+- Lead and event count queries match CSV (unlimited) query row counts.
+- Email-filtered lead/event queries keep parity between table query and count query.
+- No-filter table query returns non-empty rows whenever no-filter CSV query is non-empty.
+
 ## Security regression checklist
 
 - Raw token is never persisted in DB.

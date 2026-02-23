@@ -1612,37 +1612,11 @@ class RTG_Admin {
 		$events_table = $wpdb->prefix . 'rtg_events';
 		$forms_table  = $wpdb->prefix . 'rtg_forms';
 
-		$where_sql = array( '1=1' );
-		$params    = array();
-
-		$email = isset( $_REQUEST['s'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['s'] ) ) : '';
-		if ( ! empty( $email ) ) {
-			$where_sql[] = 'l.email LIKE %s';
-			$params[]    = '%' . $wpdb->esc_like( $email ) . '%';
-		}
-
-		$form_id = isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0;
-		if ( $form_id > 0 ) {
-			$where_sql[] = "l.id IN (SELECT DISTINCT e2.lead_id FROM {$events_table} e2 WHERE e2.form_id = %d AND e2.event_type = %s)";
-			$params[]    = $form_id;
-			$params[]    = 'form_submit';
-		}
-
-		$user_type = isset( $_GET['user_type'] ) ? sanitize_text_field( wp_unslash( $_GET['user_type'] ) ) : '';
-		if ( ! empty( $user_type ) ) {
-			$where_sql[] = 'l.form_data LIKE %s';
-			$params[]    = '%' . $wpdb->esc_like( $user_type ) . '%';
-		}
-
-		$orderby         = 'l.created_at';
-		$order           = 'DESC';
-		$allowed_orderby = array( 'email' => 'l.email', 'created_at' => 'l.created_at' );
-		if ( isset( $_GET['orderby'] ) && isset( $allowed_orderby[ sanitize_key( $_GET['orderby'] ) ] ) ) {
-			$orderby = $allowed_orderby[ sanitize_key( $_GET['orderby'] ) ];
-		}
-		if ( isset( $_GET['order'] ) && 'asc' === strtolower( sanitize_key( $_GET['order'] ) ) ) {
-			$order = 'ASC';
-		}
+		$query_parts = self::build_lead_query_parts();
+		$where_sql   = $query_parts['where_sql'];
+		$params      = $query_parts['params'];
+		$orderby     = $query_parts['orderby'];
+		$order       = $query_parts['order'];
 
 		$sql = "SELECT l.id, l.email, l.form_data, l.created_at,
 			(SELECT COUNT(DISTINCT e.asset_id) FROM {$events_table} e WHERE e.lead_id = l.id AND e.asset_id > 0) AS assets_accessed,
@@ -1677,29 +1651,10 @@ class RTG_Admin {
 		global $wpdb;
 
 		$leads_table  = $wpdb->prefix . 'rtg_leads';
-		$events_table = $wpdb->prefix . 'rtg_events';
 
-		$where_sql = array( '1=1' );
-		$params    = array();
-
-		$email = isset( $_REQUEST['s'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['s'] ) ) : '';
-		if ( ! empty( $email ) ) {
-			$where_sql[] = 'l.email LIKE %s';
-			$params[]    = '%' . $wpdb->esc_like( $email ) . '%';
-		}
-
-		$form_id = isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0;
-		if ( $form_id > 0 ) {
-			$where_sql[] = "l.id IN (SELECT DISTINCT e2.lead_id FROM {$events_table} e2 WHERE e2.form_id = %d AND e2.event_type = %s)";
-			$params[]    = $form_id;
-			$params[]    = 'form_submit';
-		}
-
-		$user_type = isset( $_GET['user_type'] ) ? sanitize_text_field( wp_unslash( $_GET['user_type'] ) ) : '';
-		if ( ! empty( $user_type ) ) {
-			$where_sql[] = 'l.form_data LIKE %s';
-			$params[]    = '%' . $wpdb->esc_like( $user_type ) . '%';
-		}
+		$query_parts = self::build_lead_query_parts();
+		$where_sql   = $query_parts['where_sql'];
+		$params      = $query_parts['params'];
 
 		$sql = "SELECT COUNT(*) FROM {$leads_table} l WHERE " . implode( ' AND ', $where_sql );
 
@@ -1762,6 +1717,73 @@ class RTG_Admin {
 		}
 
 		fclose( $fp );
+	}
+
+	/**
+	 * Build normalized lead filters from request parameters.
+	 *
+	 * @return array
+	 */
+	private static function build_lead_filters_from_request() {
+		return array(
+			'email'     => isset( $_REQUEST['s'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['s'] ) ) : '',
+			'form_id'   => isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0,
+			'user_type' => isset( $_GET['user_type'] ) ? sanitize_text_field( wp_unslash( $_GET['user_type'] ) ) : '',
+			'orderby'   => isset( $_GET['orderby'] ) ? sanitize_key( wp_unslash( $_GET['orderby'] ) ) : '',
+			'order'     => isset( $_GET['order'] ) ? sanitize_key( wp_unslash( $_GET['order'] ) ) : '',
+		);
+	}
+
+	/**
+	 * Build normalized WHERE and ORDER BY SQL fragments for lead queries.
+	 *
+	 * @return array
+	 */
+	private static function build_lead_query_parts() {
+		global $wpdb;
+
+		$events_table = $wpdb->prefix . 'rtg_events';
+		$filters      = self::build_lead_filters_from_request();
+		$where_sql    = array( '1=1' );
+		$params       = array();
+
+		if ( ! empty( $filters['email'] ) ) {
+			$where_sql[] = 'l.email LIKE %s';
+			$params[]    = '%' . $wpdb->esc_like( $filters['email'] ) . '%';
+		}
+
+		if ( $filters['form_id'] > 0 ) {
+			$where_sql[] = "l.id IN (SELECT DISTINCT e2.lead_id FROM {$events_table} e2 WHERE e2.form_id = %d AND e2.event_type = %s)";
+			$params[]    = $filters['form_id'];
+			$params[]    = 'form_submit';
+		}
+
+		if ( ! empty( $filters['user_type'] ) ) {
+			$where_sql[] = 'l.form_data LIKE %s';
+			$params[]    = '%' . $wpdb->esc_like( $filters['user_type'] ) . '%';
+		}
+
+		$allowed_orderby = array(
+			'email'      => 'l.email',
+			'created_at' => 'l.created_at',
+		);
+
+		$orderby = 'l.created_at';
+		if ( ! empty( $filters['orderby'] ) && isset( $allowed_orderby[ $filters['orderby'] ] ) ) {
+			$orderby = $allowed_orderby[ $filters['orderby'] ];
+		}
+
+		$order = 'DESC';
+		if ( 'asc' === strtolower( $filters['order'] ) ) {
+			$order = 'ASC';
+		}
+
+		return array(
+			'where_sql' => $where_sql,
+			'params'    => $params,
+			'orderby'   => $orderby,
+			'order'     => $order,
+		);
 	}
 
 	/**
