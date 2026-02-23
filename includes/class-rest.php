@@ -15,7 +15,7 @@ class RTG_REST {
 	 *
 	 * @var string
 	 */
-	const NAMESPACE = 'rtg/v1';
+	const REST_NAMESPACE = 'rtg/v1';
 
 	/**
 	 * Register hooks.
@@ -35,7 +35,7 @@ class RTG_REST {
 	 */
 	public static function register_routes() {
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/submit',
 			array(
 				'methods'             => 'POST',
@@ -65,7 +65,7 @@ class RTG_REST {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/validate',
 			array(
 				'methods'             => 'POST',
@@ -87,7 +87,7 @@ class RTG_REST {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/form/(?P<form_id>\d+)',
 			array(
 				'methods'             => 'GET',
@@ -104,7 +104,7 @@ class RTG_REST {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/event',
 			array(
 				'methods'             => 'POST',
@@ -147,7 +147,7 @@ class RTG_REST {
 	public static function rate_limit_requests( $result, $server, $request ) {
 		$route = $request->get_route();
 
-		if ( 0 !== strpos( $route, '/' . self::NAMESPACE . '/' ) ) {
+		if ( 0 !== strpos( $route, '/' . self::REST_NAMESPACE . '/' ) ) {
 			return $result;
 		}
 

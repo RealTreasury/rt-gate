@@ -23,7 +23,6 @@ define( 'RTG_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 $rtg_includes = array(
 	'includes/class-db.php',
 	'includes/class-admin.php',
-	'includes/class-events-table.php',
 	'includes/class-rest.php',
 	'includes/class-token.php',
 	'includes/class-events.php',
