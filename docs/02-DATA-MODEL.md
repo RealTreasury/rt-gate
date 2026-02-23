@@ -108,3 +108,17 @@ Relationships:
 - `leads (1) -> (N) events`
 - `forms (1) -> (N) events`
 - `assets (1) -> (N) events`
+
+
+## Lead lifecycle and deletion semantics
+
+Admin-initiated lead deletion uses explicit hard-deletion with referential cleanup:
+
+1. Delete related `rtg_tokens` records by `lead_id`.
+2. Delete related `rtg_events` records by `lead_id`.
+3. Delete the `rtg_leads` record.
+
+Rationale:
+- Avoids orphaned rows because schema does not enforce foreign-key cascades.
+- Removes direct lead-linked PII (`email`, `form_data`) from admin lookup paths and exports.
+- Keeps token and event invariants intact by removing records that can no longer be safely attributed.

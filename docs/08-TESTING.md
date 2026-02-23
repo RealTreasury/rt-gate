@@ -74,6 +74,7 @@ Validate:
 If PHPUnit/integration harness is not available, run:
 
 - `wp eval-file examples/qa/query-parity.php`
+- `php examples/qa/lead-admin-actions.php`
 
 This validates:
 
@@ -103,3 +104,13 @@ A change is ready when:
 - Security invariants remain true.
 - API behavior is backward compatible unless intentionally versioned.
 - Docs and ADRs are updated if architecture/security/integration decisions changed.
+
+
+### Lead admin action QA script
+
+`examples/qa/lead-admin-actions.php` validates that lead CRUD action wiring remains hardened:
+
+- `RTG_Admin::handle_form_actions()` contains `save_lead` and `delete_lead` branches.
+- Both lead actions enforce nonce checks (`rtg_save_lead`, `rtg_delete_lead`).
+- Capability gate (`manage_options`) remains in the handler.
+- Leads table row actions include nonce-protected delete links.
