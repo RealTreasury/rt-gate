@@ -129,6 +129,42 @@ Redirect targets:
 - Assets: `admin.php?page=rtg-assets&rtg_notice=...`
 - Mappings: `admin.php?page=rtg-mappings&rtg_notice=...`
 
+
+## Leads screen (`rtg-leads`)
+
+Renderer:
+- `RTG_Admin::render_leads_page()`
+- Detail view via `RTG_Admin::render_lead_detail( $lead_id )`
+
+Features:
+- List leads with search/filter support and CSV export.
+- Row actions in the leads table provide:
+  - **Edit** (opens lead detail editor)
+  - **Delete** (nonce-protected confirmation link)
+- Lead detail includes an **Edit Lead** form for:
+  - `email`
+  - editable `form_data` keys: `name`, `company`, `user_type`
+- Lead detail includes a **Delete Lead** button.
+
+Handler paths:
+- POST `rtg_action=save_lead`
+  - Nonce action: `rtg_save_lead`
+  - Method: `RTG_Admin::save_lead()`
+- POST/GET `rtg_action=delete_lead`
+  - Nonce action: `rtg_delete_lead`
+  - Method: `RTG_Admin::delete_lead()`
+
+Deletion semantics (explicit):
+- Lead deletion performs a hard-delete in this order:
+  1. `rtg_tokens` rows for `lead_id`
+  2. `rtg_events` rows for `lead_id`
+  3. `rtg_leads` row itself
+- This avoids orphan records and removes direct PII linkage retained via lead joins.
+
+Notice behavior:
+- Uses existing `rtg_notice` query-string pattern for success/error outcomes.
+- Error notices include `rtg_notice_type=error` and render as `notice-error`.
+
 ## Events screen (`rtg-events`)
 
 Main renderer:

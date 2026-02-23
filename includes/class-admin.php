@@ -151,6 +151,11 @@ class RTG_Admin {
 			exit;
 		}
 
+		if ( 'rtg-leads' === $page && 'delete_lead' === $action ) {
+			check_admin_referer( 'rtg_delete_lead' );
+			self::delete_lead();
+		}
+
 		if ( ! isset( $_POST['rtg_action'] ) ) {
 			return;
 		}
@@ -158,6 +163,14 @@ class RTG_Admin {
 		$action = sanitize_text_field( wp_unslash( $_POST['rtg_action'] ) );
 
 		switch ( $action ) {
+			case 'save_lead':
+				check_admin_referer( 'rtg_save_lead' );
+				self::save_lead();
+				break;
+			case 'delete_lead':
+				check_admin_referer( 'rtg_delete_lead' );
+				self::delete_lead();
+				break;
 			case 'save_form':
 				check_admin_referer( 'rtg_save_form' );
 				self::save_form();
@@ -378,6 +391,123 @@ class RTG_Admin {
 		update_option( 'rtg_settings', $settings );
 
 		wp_safe_redirect( admin_url( 'admin.php?page=rtg-settings&rtg_notice=' . rawurlencode( 'Settings saved.' ) ) );
+		exit;
+	}
+
+	/**
+	 * Save editable lead fields from admin.
+	 *
+	 * @return void
+	 */
+	private static function save_lead() {
+		global $wpdb;
+
+		$lead_id = isset( $_POST['lead_id'] ) ? absint( wp_unslash( $_POST['lead_id'] ) ) : 0;
+		if ( $lead_id <= 0 ) {
+			$lead_id = isset( $_GET['lead_id'] ) ? absint( wp_unslash( $_GET['lead_id'] ) ) : 0;
+		}
+		if ( $lead_id <= 0 ) {
+			self::redirect_with_notice( 'Lead not found.', true, $lead_id );
+		}
+
+		$leads_table = $wpdb->prefix . 'rtg_leads';
+		$lead        = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_data FROM {$leads_table} WHERE id = %d", $lead_id ) );
+
+		if ( ! $lead ) {
+			self::redirect_with_notice( 'Lead not found.', true, $lead_id );
+		}
+
+		$email = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+		if ( empty( $email ) || ! is_email( $email ) ) {
+			self::redirect_with_notice( 'Please provide a valid email address.', true, $lead_id );
+		}
+
+		$form_data = json_decode( (string) $lead->form_data, true );
+		if ( ! is_array( $form_data ) ) {
+			$form_data = array();
+		}
+		$editable_keys = array( 'name', 'company', 'user_type' );
+		foreach ( $editable_keys as $key ) {
+			if ( array_key_exists( $key, $_POST ) ) {
+				$form_data[ $key ] = sanitize_text_field( wp_unslash( $_POST[ $key ] ) );
+			}
+		}
+
+		$updated = $wpdb->update(
+			$leads_table,
+			array(
+				'email'     => $email,
+				'form_data' => wp_json_encode( $form_data ),
+			),
+			array( 'id' => $lead_id ),
+			array( '%s', '%s' ),
+			array( '%d' )
+		);
+
+		if ( false === $updated ) {
+			self::redirect_with_notice( 'Unable to save lead. The email may already exist.', true, $lead_id );
+		}
+
+		self::redirect_with_notice( 'Lead updated.', false, $lead_id );
+	}
+
+	/**
+	 * Delete a lead and related rows.
+	 *
+	 * Strategy: hard-delete the lead's tokens and events first, then delete the lead row.
+	 * This avoids orphaned rows and removes direct PII linkage from historical records.
+	 *
+	 * @return void
+	 */
+	private static function delete_lead() {
+		global $wpdb;
+
+		$lead_id = isset( $_POST['lead_id'] ) ? absint( wp_unslash( $_POST['lead_id'] ) ) : 0;
+		if ( $lead_id <= 0 ) {
+			$lead_id = isset( $_GET['lead_id'] ) ? absint( wp_unslash( $_GET['lead_id'] ) ) : 0;
+		}
+		if ( $lead_id <= 0 ) {
+			self::redirect_with_notice( 'Lead not found.', true );
+		}
+
+		$leads_table  = $wpdb->prefix . 'rtg_leads';
+		$tokens_table = $wpdb->prefix . 'rtg_tokens';
+		$events_table = $wpdb->prefix . 'rtg_events';
+
+		$deleted_tokens = $wpdb->delete( $tokens_table, array( 'lead_id' => $lead_id ), array( '%d' ) );
+		$deleted_events = $wpdb->delete( $events_table, array( 'lead_id' => $lead_id ), array( '%d' ) );
+		$deleted_lead   = $wpdb->delete( $leads_table, array( 'id' => $lead_id ), array( '%d' ) );
+
+		if ( false === $deleted_tokens || false === $deleted_events || false === $deleted_lead || 0 === $deleted_lead ) {
+			self::redirect_with_notice( 'Unable to delete lead.', true );
+		}
+
+		self::redirect_with_notice( 'Lead deleted.', false );
+	}
+
+	/**
+	 * Redirect leads admin with a notice message.
+	 *
+	 * @param string $notice     Message text.
+	 * @param bool   $is_error   Whether notice is an error.
+	 * @param int    $lead_id    Optional lead context.
+	 * @return void
+	 */
+	private static function redirect_with_notice( $notice, $is_error = false, $lead_id = 0 ) {
+		$query_args = array(
+			'page'       => 'rtg-leads',
+			'rtg_notice' => $notice,
+		);
+
+		if ( $is_error ) {
+			$query_args['rtg_notice_type'] = 'error';
+		}
+
+		if ( $lead_id > 0 ) {
+			$query_args['lead_id'] = absint( $lead_id );
+		}
+
+		wp_safe_redirect( admin_url( 'admin.php?' . http_build_query( $query_args ) ) );
 		exit;
 	}
 
@@ -1435,6 +1565,7 @@ class RTG_Admin {
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'Leads', 'rt-gate' ); ?></h1>
+			<?php self::render_notice(); ?>
 			<p>
 				<a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=rtg-leads&rtg_action=export_leads_csv' ), 'rtg_export_leads_csv' ) ); ?>">
 					<?php echo esc_html__( 'Export CSV', 'rt-gate' ); ?>
@@ -1472,6 +1603,11 @@ class RTG_Admin {
 			$form_data = array();
 		}
 
+		$editable_values = array(
+			'name'      => isset( $form_data['name'] ) && is_scalar( $form_data['name'] ) ? (string) $form_data['name'] : '',
+			'company'   => isset( $form_data['company'] ) && is_scalar( $form_data['company'] ) ? (string) $form_data['company'] : '',
+			'user_type' => isset( $form_data['user_type'] ) && is_scalar( $form_data['user_type'] ) ? (string) $form_data['user_type'] : '',
+		);
 		$events_table = $wpdb->prefix . 'rtg_events';
 		$forms_table  = $wpdb->prefix . 'rtg_forms';
 		$assets_table = $wpdb->prefix . 'rtg_assets';
@@ -1501,10 +1637,45 @@ class RTG_Admin {
 		) );
 		?>
 		<div class="wrap">
+			<?php self::render_notice(); ?>
 			<p>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-leads' ) ); ?>">&larr; <?php echo esc_html__( 'Back to Leads', 'rt-gate' ); ?></a>
 			</p>
 			<h1><?php echo esc_html( $lead->email ); ?></h1>
+
+			<div class="rtg-card" style="margin-bottom: 20px;">
+				<h3><?php echo esc_html__( 'Edit Lead', 'rt-gate' ); ?></h3>
+				<form method="post">
+					<input type="hidden" name="rtg_action" value="save_lead" />
+					<input type="hidden" name="lead_id" value="<?php echo esc_attr( $lead_id ); ?>" />
+					<?php wp_nonce_field( 'rtg_save_lead' ); ?>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th scope="row"><label for="rtg_lead_email"><?php echo esc_html__( 'Email', 'rt-gate' ); ?></label></th>
+							<td><input id="rtg_lead_email" name="email" type="email" class="regular-text" value="<?php echo esc_attr( $lead->email ); ?>" required /></td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="rtg_lead_name"><?php echo esc_html__( 'Name', 'rt-gate' ); ?></label></th>
+							<td><input id="rtg_lead_name" name="name" type="text" class="regular-text" value="<?php echo esc_attr( $editable_values['name'] ); ?>" /></td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="rtg_lead_company"><?php echo esc_html__( 'Company', 'rt-gate' ); ?></label></th>
+							<td><input id="rtg_lead_company" name="company" type="text" class="regular-text" value="<?php echo esc_attr( $editable_values['company'] ); ?>" /></td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="rtg_lead_user_type"><?php echo esc_html__( 'User Type', 'rt-gate' ); ?></label></th>
+							<td><input id="rtg_lead_user_type" name="user_type" type="text" class="regular-text" value="<?php echo esc_attr( $editable_values['user_type'] ); ?>" /></td>
+						</tr>
+					</table>
+					<?php submit_button( esc_html__( 'Save Lead', 'rt-gate' ) ); ?>
+				</form>
+				<form method="post" onsubmit="return confirm('<?php echo esc_js( __( 'Delete this lead and all related tokens/events?', 'rt-gate' ) ); ?>');">
+					<input type="hidden" name="rtg_action" value="delete_lead" />
+					<input type="hidden" name="lead_id" value="<?php echo esc_attr( $lead_id ); ?>" />
+					<?php wp_nonce_field( 'rtg_delete_lead' ); ?>
+					<?php submit_button( esc_html__( 'Delete Lead', 'rt-gate' ), 'delete', 'submit', false ); ?>
+				</form>
+			</div>
 
 			<div class="rtg-lead-detail-grid">
 				<div class="rtg-card">
@@ -1797,9 +1968,11 @@ class RTG_Admin {
 			return;
 		}
 
-		$notice = sanitize_text_field( wp_unslash( $_GET['rtg_notice'] ) );
+		$notice      = sanitize_text_field( wp_unslash( $_GET['rtg_notice'] ) );
+		$notice_type = isset( $_GET['rtg_notice_type'] ) ? sanitize_key( wp_unslash( $_GET['rtg_notice_type'] ) ) : 'success';
+		$css_class   = 'error' === $notice_type ? 'notice notice-error is-dismissible' : 'notice notice-success is-dismissible';
 		?>
-		<div class="notice notice-success is-dismissible">
+		<div class="<?php echo esc_attr( $css_class ); ?>">
 			<p><?php echo esc_html( $notice ); ?></p>
 		</div>
 		<?php
@@ -1986,8 +2159,14 @@ if ( class_exists( 'WP_List_Table' ) ) {
 
 			switch ( $column_name ) {
 				case 'email':
-					$url = admin_url( 'admin.php?page=rtg-leads&lead_id=' . absint( $item->id ) );
-					return '<a href="' . esc_url( $url ) . '"><strong>' . esc_html( $item->email ) . '</strong></a>';
+					$lead_id     = absint( $item->id );
+					$detail_url  = admin_url( 'admin.php?page=rtg-leads&lead_id=' . $lead_id );
+					$delete_url  = wp_nonce_url( admin_url( 'admin.php?page=rtg-leads&lead_id=' . $lead_id . '&rtg_action=delete_lead' ), 'rtg_delete_lead' );
+					$row_actions = array(
+						'edit'   => '<a href="' . esc_url( $detail_url ) . '">' . esc_html__( 'Edit', 'rt-gate' ) . '</a>',
+						'delete' => '<a href="' . esc_url( $delete_url ) . '" class="submitdelete" onclick="return confirm(\'' . esc_js( __( 'Delete this lead and all related tokens/events?', 'rt-gate' ) ) . '\');">' . esc_html__( 'Delete', 'rt-gate' ) . '</a>',
+					);
+					return '<a href="' . esc_url( $detail_url ) . '"><strong>' . esc_html( $item->email ) . '</strong></a>' . $this->row_actions( $row_actions );
 
 				case 'name':
 					$name = '';
