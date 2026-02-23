@@ -54,7 +54,7 @@ Purpose: lead identity and submitted field payload.
 Columns:
 - `id` bigint unsigned PK
 - `email` varchar(191) UNIQUE
-- `form_data` longtext (JSON payload as string)
+- `form_data` longtext (JSON payload as string; supports legacy flat shape and history-aware shape)
 - `ip_hash` varchar(191) (sha256)
 - `ua_hash` varchar(191) (sha256)
 - `created_at` datetime
@@ -62,6 +62,16 @@ Columns:
 Relationships:
 - One lead can have many tokens via `rtg_tokens.lead_id`.
 - One lead can have many events via `rtg_events.lead_id`.
+
+`form_data` JSON semantics (backward compatible):
+- Legacy rows may still contain a flat object (example: `{"email":"x@example.com","company":"Acme"}`).
+- New submit upserts write an envelope with:
+  - `latest`: latest submitted fields object (used by current lead list/detail UX)
+  - `history`: object keyed by `form_id`, then submission timestamp, storing payload snapshots
+  - top-level legacy-compatible keys copied from `latest` (for older logic and exports)
+- Example new shape:
+  - `{ "latest": {"email":"x@example.com"}, "history": {"12": {"2026-01-01T12:00:00Z": {"email":"x@example.com"}}}, "email": "x@example.com" }`
+
 
 ## 5) `rtg_tokens`
 Purpose: per-lead/per-asset access grants.
