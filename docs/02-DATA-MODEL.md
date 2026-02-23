@@ -93,6 +93,9 @@ Columns:
 - `asset_id` bigint unsigned (indexed)
 - `event_type` varchar(100) (indexed)
 - `meta` longtext (JSON payload as string)
+- `is_deleted` tinyint(1) (indexed, default `0`)
+- `deleted_at` datetime nullable
+- `deleted_by` bigint unsigned (admin user ID, default `0`)
 - `created_at` datetime (indexed)
 
 Relationships:
@@ -122,3 +125,16 @@ Rationale:
 - Avoids orphaned rows because schema does not enforce foreign-key cascades.
 - Removes direct lead-linked PII (`email`, `form_data`) from admin lookup paths and exports.
 - Keeps token and event invariants intact by removing records that can no longer be safely attributed.
+
+## Event deletion semantics
+
+Admin-initiated event deletion uses **soft delete** to preserve auditability while hiding records from default admin views and CSV export:
+
+- `is_deleted = 1` marks event as removed from normal reporting.
+- `deleted_at` stores UTC deletion timestamp.
+- `deleted_by` stores the admin user ID that performed the delete action.
+
+Query behavior:
+- `RTG_Events::query_events()` and `RTG_Events::count_events()` enforce `e.is_deleted = 0` by default.
+- Admin UI can include deleted rows only when `include_deleted=1` filter is set.
+- CSV export uses the same filtered query path and therefore excludes deleted rows by default.

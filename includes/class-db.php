@@ -83,12 +83,16 @@ class RTG_DB {
 	asset_id bigint(20) unsigned NOT NULL,
 	event_type varchar(100) NOT NULL,
 	meta longtext NOT NULL,
+	is_deleted tinyint(1) unsigned NOT NULL DEFAULT 0,
+	deleted_at datetime NULL,
+	deleted_by bigint(20) unsigned NOT NULL DEFAULT 0,
 	created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY  (id),
 	KEY lead_id (lead_id),
 	KEY form_id (form_id),
 	KEY asset_id (asset_id),
 	KEY event_type (event_type),
+	KEY is_deleted (is_deleted),
 	KEY created_at (created_at)
 ) {$charset_collate};";
 
