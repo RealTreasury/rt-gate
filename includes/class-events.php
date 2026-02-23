@@ -170,44 +170,10 @@ class RTG_Events {
 
 		$events_table = $wpdb->prefix . 'rtg_events';
 		$leads_table  = $wpdb->prefix . 'rtg_leads';
-		$where_sql    = array( '1=1' );
-		$params       = array();
 
-		$form_id = isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0;
-		if ( $form_id > 0 ) {
-			$where_sql[] = 'e.form_id = %d';
-			$params[]    = $form_id;
-		}
-
-		$asset_id = isset( $_GET['asset_id'] ) ? absint( wp_unslash( $_GET['asset_id'] ) ) : 0;
-		if ( $asset_id > 0 ) {
-			$where_sql[] = 'e.asset_id = %d';
-			$params[]    = $asset_id;
-		}
-
-		$event_type = isset( $_GET['event_type'] ) ? sanitize_key( wp_unslash( $_GET['event_type'] ) ) : '';
-		if ( ! empty( $event_type ) ) {
-			$where_sql[] = 'e.event_type = %s';
-			$params[]    = $event_type;
-		}
-
-		$email = isset( $_REQUEST['s'] ) ? sanitize_email( wp_unslash( $_REQUEST['s'] ) ) : '';
-		if ( ! empty( $email ) ) {
-			$where_sql[] = 'l.email LIKE %s';
-			$params[]    = '%' . $wpdb->esc_like( $email ) . '%';
-		}
-
-		$date_from = isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '';
-		if ( ! empty( $date_from ) ) {
-			$where_sql[] = 'e.created_at >= %s';
-			$params[]    = gmdate( 'Y-m-d 00:00:00', strtotime( $date_from ) );
-		}
-
-		$date_to = isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '';
-		if ( ! empty( $date_to ) ) {
-			$where_sql[] = 'e.created_at <= %s';
-			$params[]    = gmdate( 'Y-m-d 23:59:59', strtotime( $date_to ) );
-		}
+		$query_parts = self::build_event_query_parts();
+		$where_sql   = $query_parts['where_sql'];
+		$params      = $query_parts['params'];
 
 		$forms_table  = $wpdb->prefix . 'rtg_forms';
 		$assets_table = $wpdb->prefix . 'rtg_assets';
@@ -245,44 +211,9 @@ class RTG_Events {
 
 		$events_table = $wpdb->prefix . 'rtg_events';
 		$leads_table  = $wpdb->prefix . 'rtg_leads';
-		$where_sql    = array( '1=1' );
-		$params       = array();
-
-		$form_id = isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0;
-		if ( $form_id > 0 ) {
-			$where_sql[] = 'e.form_id = %d';
-			$params[]    = $form_id;
-		}
-
-		$asset_id = isset( $_GET['asset_id'] ) ? absint( wp_unslash( $_GET['asset_id'] ) ) : 0;
-		if ( $asset_id > 0 ) {
-			$where_sql[] = 'e.asset_id = %d';
-			$params[]    = $asset_id;
-		}
-
-		$event_type = isset( $_GET['event_type'] ) ? sanitize_key( wp_unslash( $_GET['event_type'] ) ) : '';
-		if ( ! empty( $event_type ) ) {
-			$where_sql[] = 'e.event_type = %s';
-			$params[]    = $event_type;
-		}
-
-		$email = isset( $_REQUEST['s'] ) ? sanitize_email( wp_unslash( $_REQUEST['s'] ) ) : '';
-		if ( ! empty( $email ) ) {
-			$where_sql[] = 'l.email LIKE %s';
-			$params[]    = '%' . $wpdb->esc_like( $email ) . '%';
-		}
-
-		$date_from = isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '';
-		if ( ! empty( $date_from ) ) {
-			$where_sql[] = 'e.created_at >= %s';
-			$params[]    = gmdate( 'Y-m-d 00:00:00', strtotime( $date_from ) );
-		}
-
-		$date_to = isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '';
-		if ( ! empty( $date_to ) ) {
-			$where_sql[] = 'e.created_at <= %s';
-			$params[]    = gmdate( 'Y-m-d 23:59:59', strtotime( $date_to ) );
-		}
+		$query_parts = self::build_event_query_parts();
+		$where_sql   = $query_parts['where_sql'];
+		$params      = $query_parts['params'];
 
 		$sql = "SELECT COUNT(*) FROM {$events_table} e
 			LEFT JOIN {$leads_table} l ON l.id = e.lead_id
@@ -311,6 +242,70 @@ class RTG_Events {
 	 */
 	private static function get_user_agent() {
 		return RTG_Utils::get_user_agent();
+	}
+
+	/**
+	 * Build normalized event filters from request parameters.
+	 *
+	 * @return array
+	 */
+	private static function build_event_filters_from_request() {
+		return array(
+			'form_id'    => isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0,
+			'asset_id'   => isset( $_GET['asset_id'] ) ? absint( wp_unslash( $_GET['asset_id'] ) ) : 0,
+			'event_type' => isset( $_GET['event_type'] ) ? sanitize_key( wp_unslash( $_GET['event_type'] ) ) : '',
+			'email'      => isset( $_REQUEST['s'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['s'] ) ) : '',
+			'date_from'  => isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '',
+			'date_to'    => isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '',
+		);
+	}
+
+	/**
+	 * Build normalized WHERE SQL fragments for event queries.
+	 *
+	 * @return array
+	 */
+	private static function build_event_query_parts() {
+		global $wpdb;
+
+		$filters   = self::build_event_filters_from_request();
+		$where_sql = array( '1=1' );
+		$params    = array();
+
+		if ( $filters['form_id'] > 0 ) {
+			$where_sql[] = 'e.form_id = %d';
+			$params[]    = $filters['form_id'];
+		}
+
+		if ( $filters['asset_id'] > 0 ) {
+			$where_sql[] = 'e.asset_id = %d';
+			$params[]    = $filters['asset_id'];
+		}
+
+		if ( ! empty( $filters['event_type'] ) ) {
+			$where_sql[] = 'e.event_type = %s';
+			$params[]    = $filters['event_type'];
+		}
+
+		if ( ! empty( $filters['email'] ) ) {
+			$where_sql[] = 'l.email LIKE %s';
+			$params[]    = '%' . $wpdb->esc_like( $filters['email'] ) . '%';
+		}
+
+		if ( ! empty( $filters['date_from'] ) ) {
+			$where_sql[] = 'e.created_at >= %s';
+			$params[]    = gmdate( 'Y-m-d 00:00:00', strtotime( $filters['date_from'] ) );
+		}
+
+		if ( ! empty( $filters['date_to'] ) ) {
+			$where_sql[] = 'e.created_at <= %s';
+			$params[]    = gmdate( 'Y-m-d 23:59:59', strtotime( $filters['date_to'] ) );
+		}
+
+		return array(
+			'where_sql' => $where_sql,
+			'params'    => $params,
+		);
 	}
 }
 
