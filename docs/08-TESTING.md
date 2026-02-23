@@ -114,3 +114,12 @@ A change is ready when:
 - Both lead actions enforce nonce checks (`rtg_save_lead`, `rtg_delete_lead`).
 - Capability gate (`manage_options`) remains in the handler.
 - Leads table row actions include nonce-protected delete links.
+
+### Event admin action QA script
+
+`examples/qa/event-admin-actions.php` validates event mutation wiring and visibility policy:
+
+- `RTG_Events::handle_admin_actions()` enforces capability checks (`manage_options`).
+- `delete_event` action validates nonce (`rtg_delete_event_{event_id}`).
+- Events query defaults include `e.is_deleted = 0`.
+- Events admin table exposes `include_deleted` filter for audit-only visibility.

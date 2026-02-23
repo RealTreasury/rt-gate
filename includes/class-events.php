@@ -65,7 +65,7 @@ class RTG_Events {
 	}
 
 	/**
-	 * Process CSV export requests.
+	 * Process event admin actions.
 	 *
 	 * @return void
 	 */
@@ -77,12 +77,78 @@ class RTG_Events {
 		$page   = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 		$action = isset( $_GET['rtg_action'] ) ? sanitize_key( wp_unslash( $_GET['rtg_action'] ) ) : '';
 
-		if ( 'rtg-events' !== $page || 'export_events_csv' !== $action ) {
+		if ( 'rtg-events' !== $page ) {
 			return;
 		}
 
-		check_admin_referer( 'rtg_export_events_csv' );
-		self::export_csv();
+		switch ( $action ) {
+			case 'export_events_csv':
+				check_admin_referer( 'rtg_export_events_csv' );
+				self::export_csv();
+				exit;
+			case 'delete_event':
+				$event_id = isset( $_GET['event_id'] ) ? absint( wp_unslash( $_GET['event_id'] ) ) : 0;
+				check_admin_referer( 'rtg_delete_event_' . $event_id );
+				self::delete_event( $event_id );
+				break;
+		}
+	}
+
+	/**
+	 * Soft-delete an event record.
+	 *
+	 * @param int $event_id Event ID.
+	 * @return void
+	 */
+	private static function delete_event( $event_id ) {
+		global $wpdb;
+
+		$event_id = absint( $event_id );
+		if ( $event_id <= 0 ) {
+			self::redirect_with_notice( esc_html__( 'Invalid event ID.', 'rt-gate' ), true );
+		}
+
+		$events_table = $wpdb->prefix . 'rtg_events';
+		$updated      = $wpdb->update(
+			$events_table,
+			array(
+				'is_deleted' => 1,
+				'deleted_at' => current_time( 'mysql', true ),
+				'deleted_by' => get_current_user_id(),
+			),
+			array(
+				'id'         => $event_id,
+				'is_deleted' => 0,
+			),
+			array( '%d', '%s', '%d' ),
+			array( '%d', '%d' )
+		);
+
+		if ( false === $updated || 0 === $updated ) {
+			self::redirect_with_notice( esc_html__( 'Unable to delete event.', 'rt-gate' ), true );
+		}
+
+		self::redirect_with_notice( esc_html__( 'Event deleted.', 'rt-gate' ) );
+	}
+
+	/**
+	 * Redirect events page with admin notice.
+	 *
+	 * @param string $message Notice message.
+	 * @param bool   $is_error Whether the notice is an error.
+	 * @return void
+	 */
+	private static function redirect_with_notice( $message, $is_error = false ) {
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page'      => 'rtg-events',
+					'rtg_msg'   => rawurlencode( $message ),
+					'rtg_error' => $is_error ? '1' : '0',
+				),
+				admin_url( 'admin.php' )
+			)
+		);
 		exit;
 	}
 
@@ -109,6 +175,7 @@ class RTG_Events {
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'Events', 'rt-gate' ); ?></h1>
+			<?php self::render_admin_notice(); ?>
 			<p>
 				<a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=rtg-events&rtg_action=export_events_csv' ), 'rtg_export_events_csv' ) ); ?>">
 					<?php echo esc_html__( 'Export CSV', 'rt-gate' ); ?>
@@ -121,6 +188,24 @@ class RTG_Events {
 				<?php $table->display(); ?>
 			</form>
 		</div>
+		<?php
+	}
+
+	/**
+	 * Render events admin notices.
+	 *
+	 * @return void
+	 */
+	private static function render_admin_notice() {
+		if ( ! isset( $_GET['rtg_msg'] ) ) {
+			return;
+		}
+
+		$message  = sanitize_text_field( wp_unslash( $_GET['rtg_msg'] ) );
+		$is_error = isset( $_GET['rtg_error'] ) && '1' === sanitize_key( wp_unslash( $_GET['rtg_error'] ) );
+		$class    = $is_error ? 'notice notice-error' : 'notice notice-success';
+		?>
+		<div class="<?php echo esc_attr( $class ); ?> is-dismissible"><p><?php echo esc_html( rawurldecode( $message ) ); ?></p></div>
 		<?php
 	}
 
@@ -212,9 +297,9 @@ class RTG_Events {
 
 		$events_table = $wpdb->prefix . 'rtg_events';
 		$leads_table  = $wpdb->prefix . 'rtg_leads';
-		$query_parts = self::build_event_query_parts();
-		$where_sql   = $query_parts['where_sql'];
-		$params      = $query_parts['params'];
+		$query_parts  = self::build_event_query_parts();
+		$where_sql    = $query_parts['where_sql'];
+		$params       = $query_parts['params'];
 
 		$sql = "SELECT COUNT(*) FROM {$events_table} e
 			LEFT JOIN {$leads_table} l ON l.id = e.lead_id
@@ -252,12 +337,13 @@ class RTG_Events {
 	 */
 	private static function build_event_filters_from_request() {
 		return array(
-			'form_id'    => isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0,
-			'asset_id'   => isset( $_GET['asset_id'] ) ? absint( wp_unslash( $_GET['asset_id'] ) ) : 0,
-			'event_type' => isset( $_GET['event_type'] ) ? sanitize_key( wp_unslash( $_GET['event_type'] ) ) : '',
-			'email'      => isset( $_REQUEST['s'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['s'] ) ) : '',
-			'date_from'  => isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '',
-			'date_to'    => isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '',
+			'form_id'         => isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0,
+			'asset_id'        => isset( $_GET['asset_id'] ) ? absint( wp_unslash( $_GET['asset_id'] ) ) : 0,
+			'event_type'      => isset( $_GET['event_type'] ) ? sanitize_key( wp_unslash( $_GET['event_type'] ) ) : '',
+			'email'           => isset( $_REQUEST['s'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['s'] ) ) : '',
+			'date_from'       => isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '',
+			'date_to'         => isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '',
+			'include_deleted' => isset( $_GET['include_deleted'] ) ? absint( wp_unslash( $_GET['include_deleted'] ) ) : 0,
 		);
 	}
 
@@ -272,6 +358,10 @@ class RTG_Events {
 		$filters   = self::build_event_filters_from_request();
 		$where_sql = array( '1=1' );
 		$params    = array();
+
+		if ( 1 !== $filters['include_deleted'] ) {
+			$where_sql[] = 'e.is_deleted = 0';
+		}
 
 		if ( $filters['form_id'] > 0 ) {
 			$where_sql[] = 'e.form_id = %d';
@@ -380,7 +470,6 @@ if ( class_exists( 'WP_List_Table' ) ) {
 			);
 		}
 
-
 		/**
 		 * Render a generic query failure notice.
 		 *
@@ -416,12 +505,27 @@ if ( class_exists( 'WP_List_Table' ) ) {
 		}
 
 		/**
-		 * Render default columns.
+		 * Render the primary column with row actions.
 		 *
-		 * @param array  $item Item data.
-		 * @param string $column_name Column key.
+		 * @param object $item Event row.
 		 * @return string
 		 */
+		public function column_email( $item ) {
+			$event_id = absint( $item->id );
+			$email    = esc_html( (string) $item->email );
+
+			$delete_url = wp_nonce_url(
+				admin_url( 'admin.php?page=rtg-events&event_id=' . $event_id . '&rtg_action=delete_event' ),
+				'rtg_delete_event_' . $event_id
+			);
+
+			$actions = array(
+				'delete' => '<a href="' . esc_url( $delete_url ) . '" class="submitdelete" onclick="return confirm(\'' . esc_js( __( 'Soft-delete this event from default views?', 'rt-gate' ) ) . '\');">' . esc_html__( 'Delete', 'rt-gate' ) . '</a>',
+			);
+
+			return $email . $this->row_actions( $actions );
+		}
+
 		/**
 		 * Render dropdown filters above the table.
 		 *
@@ -437,9 +541,10 @@ if ( class_exists( 'WP_List_Table' ) ) {
 			$forms  = $wpdb->get_results( "SELECT id, name FROM {$wpdb->prefix}rtg_forms ORDER BY name ASC" );
 			$assets = $wpdb->get_results( "SELECT id, name FROM {$wpdb->prefix}rtg_assets ORDER BY name ASC" );
 
-			$current_form_id    = isset( $_GET['form_id'] ) ? absint( $_GET['form_id'] ) : 0;
-			$current_asset_id   = isset( $_GET['asset_id'] ) ? absint( $_GET['asset_id'] ) : 0;
-			$current_event_type = isset( $_GET['event_type'] ) ? sanitize_key( $_GET['event_type'] ) : '';
+			$current_form_id      = isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0;
+			$current_asset_id     = isset( $_GET['asset_id'] ) ? absint( wp_unslash( $_GET['asset_id'] ) ) : 0;
+			$current_event_type   = isset( $_GET['event_type'] ) ? sanitize_key( wp_unslash( $_GET['event_type'] ) ) : '';
+			$current_show_deleted = isset( $_GET['include_deleted'] ) ? absint( wp_unslash( $_GET['include_deleted'] ) ) : 0;
 
 			$event_types = array( 'form_submit', 'page_view', 'download_click', 'video_play', 'video_progress' );
 			?>
@@ -465,11 +570,23 @@ if ( class_exists( 'WP_List_Table' ) ) {
 					<?php endforeach; ?>
 				</select>
 
+				<label>
+					<input type="checkbox" name="include_deleted" value="1" <?php checked( 1, $current_show_deleted ); ?> />
+					<?php echo esc_html__( 'Include deleted', 'rt-gate' ); ?>
+				</label>
+
 				<?php submit_button( esc_html__( 'Filter', 'rt-gate' ), '', '', false ); ?>
 			</div>
 			<?php
 		}
 
+		/**
+		 * Render default columns.
+		 *
+		 * @param array  $item Item data.
+		 * @param string $column_name Column key.
+		 * @return string
+		 */
 		public function column_default( $item, $column_name ) {
 			switch ( $column_name ) {
 				case 'id':
@@ -480,7 +597,6 @@ if ( class_exists( 'WP_List_Table' ) ) {
 				case 'asset_id':
 					$name = ! empty( $item->asset_name ) ? $item->asset_name : '#' . absint( $item->asset_id );
 					return esc_html( $name );
-				case 'email':
 				case 'event_type':
 					return esc_html( (string) $item->$column_name );
 				case 'meta':

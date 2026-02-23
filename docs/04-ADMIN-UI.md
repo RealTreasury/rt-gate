@@ -176,6 +176,15 @@ The page instantiates `RTG_Events_List_Table` and renders:
 - Paginated event table
 - CSV export button
 
+
+Mutation actions:
+- Row action **Delete** performs a nonce-protected soft delete (`rtg_action=delete_event`) on a single event.
+- Delete action requires `manage_options` and verifies a per-event nonce.
+
+Visibility behavior:
+- Events list and Events CSV export hide soft-deleted events by default.
+- Filter checkbox **Include deleted** (`include_deleted=1`) allows admins to view deleted rows in the table when needed for audit review.
+
 ## `WP_List_Table` implementation
 
 Class:
