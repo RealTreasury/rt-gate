@@ -1424,6 +1424,12 @@ class RTG_Admin {
 
 		require_once ABSPATH . 'wp-admin/includes/class-wp-list-table.php';
 
+		if ( ! class_exists( 'RTG_Leads_List_Table' ) ) {
+			echo '<div class="wrap"><h1>' . esc_html__( 'Leads', 'rt-gate' ) . '</h1>';
+			echo '<p>' . esc_html__( 'Unable to load the leads table. Please deactivate and reactivate the plugin.', 'rt-gate' ) . '</p></div>';
+			return;
+		}
+
 		$table = new RTG_Leads_List_Table();
 		$table->prepare_items();
 		?>
@@ -1650,7 +1656,9 @@ class RTG_Admin {
 			ORDER BY {$orderby} {$order}";
 
 		if ( $limit > 0 ) {
-			$sql   .= $wpdb->prepare( ' LIMIT %d OFFSET %d', absint( $limit ), absint( $offset ) );
+			$sql     .= ' LIMIT %d OFFSET %d';
+			$params[] = absint( $limit );
+			$params[] = absint( $offset );
 		}
 
 		if ( empty( $params ) ) {
@@ -1826,7 +1834,8 @@ if ( class_exists( 'WP_List_Table' ) ) {
 			$current_page = $this->get_pagenum();
 			$offset       = ( $current_page - 1 ) * $per_page;
 
-			$this->items = RTG_Admin::query_leads( $per_page, $offset );
+			$results     = RTG_Admin::query_leads( $per_page, $offset );
+			$this->items = is_array( $results ) ? $results : array();
 			$total_items = RTG_Admin::count_leads();
 
 			$this->set_pagination_args(
@@ -1913,10 +1922,12 @@ if ( class_exists( 'WP_List_Table' ) ) {
 					return esc_html( $name );
 
 				case 'company':
-					return esc_html( isset( $form_data['company'] ) ? $form_data['company'] : '' );
+					$company = isset( $form_data['company'] ) ? $form_data['company'] : '';
+					return esc_html( is_scalar( $company ) ? (string) $company : '' );
 
 				case 'user_type':
-					return esc_html( isset( $form_data['user_type'] ) ? $form_data['user_type'] : '' );
+					$user_type = isset( $form_data['user_type'] ) ? $form_data['user_type'] : '';
+					return esc_html( is_scalar( $user_type ) ? (string) $user_type : '' );
 
 				case 'form_name':
 					return esc_html( ! empty( $item->form_names ) ? $item->form_names : '-' );
