@@ -4,6 +4,7 @@ Base path:
 - `https://<wp-site>/wp-json/rtg/v1`
 
 Supported endpoints:
+- `GET  /form/{form_id}`
 - `POST /submit`
 - `POST /validate`
 - `POST /event`
@@ -20,6 +21,51 @@ Optional/allowed headers:
 Rate limiting:
 - 10 requests/minute per route per requester hash.
 - Exceeded limit returns HTTP `429` with WP error code `rtg_rate_limited`.
+
+---
+
+## `GET /form/{form_id}`
+
+Fetch the public form schema so external pages can dynamically render the correct fields without hard-coding them.
+
+### URL parameter
+
+- `form_id` (integer) — the form ID shown in WP Admin → RT Gate → Forms
+
+### Success response (HTTP 200)
+
+```json
+{
+  "form_id": 1,
+  "fields": [
+    {
+      "key": "email",
+      "label": "Email Address",
+      "type": "email",
+      "required": true,
+      "autocomplete": true,
+      "placeholder": "you@company.com"
+    },
+    {
+      "key": "full_name",
+      "label": "Full Name",
+      "type": "text",
+      "required": true,
+      "autocomplete": true,
+      "placeholder": "Jane Smith"
+    }
+  ],
+  "consent_text": "I agree to receive updates and accept the privacy policy: https://example.com/privacy-policy/"
+}
+```
+
+### Error responses
+
+- `404 rtg_form_not_found` when the form ID does not exist
+
+Notes:
+- No authentication required; this is a public read-only endpoint.
+- The `fields[].key` values are the exact keys your form submission must use in the `fields` object sent to `POST /submit`.
 
 ---
 

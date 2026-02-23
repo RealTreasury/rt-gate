@@ -83,6 +83,23 @@ class RTG_REST {
 
 		register_rest_route(
 			self::NAMESPACE,
+			'/form/(?P<form_id>\d+)',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( __CLASS__, 'handle_form_schema' ),
+				'permission_callback' => '__return_true',
+				'args'                => array(
+					'form_id' => array(
+						'required'          => true,
+						'type'              => 'integer',
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
 			'/event',
 			array(
 				'methods'             => 'POST',
@@ -166,7 +183,7 @@ class RTG_REST {
 
 		header( 'Access-Control-Allow-Origin: ' . $origin );
 		header( 'Vary: Origin' );
-		header( 'Access-Control-Allow-Methods: POST, OPTIONS' );
+		header( 'Access-Control-Allow-Methods: GET, POST, OPTIONS' );
 		header( 'Access-Control-Allow-Headers: Content-Type, Authorization' );
 
 		if ( isset( $_SERVER['REQUEST_METHOD'] ) && 'OPTIONS' === strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) ) {
@@ -327,6 +344,40 @@ class RTG_REST {
 			array(
 				'primary_redirect_url' => $primary,
 				'assets'               => $assets,
+			)
+		);
+	}
+
+	/**
+	 * Handle GET /form/{form_id}.
+	 *
+	 * Returns the public form schema (fields and consent text) so external
+	 * pages can dynamically render the form without hard-coding field definitions.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public static function handle_form_schema( WP_REST_Request $request ) {
+		global $wpdb;
+
+		$form_id     = absint( $request->get_param( 'form_id' ) );
+		$forms_table = $wpdb->prefix . 'rtg_forms';
+
+		$form = $wpdb->get_row( $wpdb->prepare( "SELECT id, fields_schema, consent_text FROM {$forms_table} WHERE id = %d", $form_id ) );
+		if ( empty( $form ) ) {
+			return new WP_Error( 'rtg_form_not_found', 'Form not found.', array( 'status' => 404 ) );
+		}
+
+		$fields = json_decode( (string) $form->fields_schema, true );
+		if ( ! is_array( $fields ) ) {
+			$fields = array();
+		}
+
+		return rest_ensure_response(
+			array(
+				'form_id'      => (int) $form->id,
+				'fields'       => $fields,
+				'consent_text' => (string) $form->consent_text,
 			)
 		);
 	}
