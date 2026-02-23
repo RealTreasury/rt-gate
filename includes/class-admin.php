@@ -1443,6 +1443,7 @@ class RTG_Admin {
 			<form method="get">
 				<input type="hidden" name="page" value="rtg-leads" />
 				<?php $table->search_box( esc_html__( 'Search Email', 'rt-gate' ), 'rtg-leads' ); ?>
+				<?php $table->render_query_notice(); ?>
 				<?php $table->display(); ?>
 			</form>
 		</div>
@@ -1817,6 +1818,13 @@ if ( class_exists( 'WP_List_Table' ) ) {
 	 */
 	class RTG_Leads_List_Table extends WP_List_Table {
 		/**
+		 * Whether the latest query failed.
+		 *
+		 * @var bool
+		 */
+		protected $query_error = false;
+
+		/**
 		 * Define table columns.
 		 *
 		 * @return array
@@ -1852,11 +1860,19 @@ if ( class_exists( 'WP_List_Table' ) ) {
 		 * @return void
 		 */
 		public function prepare_items() {
+			global $wpdb;
+
 			$per_page     = 20;
 			$current_page = $this->get_pagenum();
 			$offset       = ( $current_page - 1 ) * $per_page;
 
-			$results     = RTG_Admin::query_leads( $per_page, $offset );
+			$results           = RTG_Admin::query_leads( $per_page, $offset );
+			$this->query_error = ! is_array( $results ) || ! empty( $wpdb->last_error );
+
+			if ( $this->query_error && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( sprintf( 'RTG Leads list query failed: %s', (string) $wpdb->last_error ) );
+			}
+
 			$this->items = is_array( $results ) ? $results : array();
 			$total_items = RTG_Admin::count_leads();
 
@@ -1873,6 +1889,23 @@ if ( class_exists( 'WP_List_Table' ) ) {
 					'per_page'    => $per_page,
 				)
 			);
+		}
+
+
+		/**
+		 * Render a generic query failure notice.
+		 *
+		 * @return void
+		 */
+		public function render_query_notice() {
+			if ( ! $this->query_error ) {
+				return;
+			}
+			?>
+			<div class="notice notice-error inline">
+				<p><?php echo esc_html__( 'We could not load the leads list right now. Please try again, or check your debug logs for details.', 'rt-gate' ); ?></p>
+			</div>
+			<?php
 		}
 
 		/**
