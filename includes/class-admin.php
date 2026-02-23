@@ -1838,12 +1838,37 @@ if ( class_exists( 'WP_List_Table' ) ) {
 			$this->items = is_array( $results ) ? $results : array();
 			$total_items = RTG_Admin::count_leads();
 
+			$columns  = $this->get_columns();
+			$hidden   = is_object( $this->screen ) ? get_hidden_columns( $this->screen ) : array();
+			$sortable = $this->get_sortable_columns();
+			$primary  = 'email';
+
+			$this->_column_headers = array( $columns, $hidden, $sortable, $primary );
+
 			$this->set_pagination_args(
 				array(
 					'total_items' => $total_items,
 					'per_page'    => $per_page,
 				)
 			);
+		}
+
+		/**
+		 * Get the primary column name used by WP_List_Table internals.
+		 *
+		 * @return string
+		 */
+		protected function get_default_primary_column_name() {
+			return 'email';
+		}
+
+		/**
+		 * Render explicit empty-state messaging.
+		 *
+		 * @return void
+		 */
+		public function no_items() {
+			echo esc_html__( 'No leads found.', 'rt-gate' );
 		}
 
 		/**

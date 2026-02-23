@@ -354,12 +354,37 @@ if ( class_exists( 'WP_List_Table' ) ) {
 			$this->items = is_array( $results ) ? $results : array();
 			$total_items = RTG_Events::count_events();
 
+			$columns  = $this->get_columns();
+			$hidden   = is_object( $this->screen ) ? get_hidden_columns( $this->screen ) : array();
+			$sortable = method_exists( $this, 'get_sortable_columns' ) ? $this->get_sortable_columns() : array();
+			$primary  = 'email';
+
+			$this->_column_headers = array( $columns, $hidden, $sortable, $primary );
+
 			$this->set_pagination_args(
 				array(
 					'total_items' => $total_items,
 					'per_page'    => $per_page,
 				)
 			);
+		}
+
+		/**
+		 * Get the primary column name used by WP_List_Table internals.
+		 *
+		 * @return string
+		 */
+		protected function get_default_primary_column_name() {
+			return 'email';
+		}
+
+		/**
+		 * Render explicit empty-state messaging.
+		 *
+		 * @return void
+		 */
+		public function no_items() {
+			echo esc_html__( 'No events found.', 'rt-gate' );
 		}
 
 		/**
