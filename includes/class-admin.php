@@ -26,6 +26,7 @@ class RTG_Admin {
 			'real-treasury-gate_page_rtg-forms',
 			'real-treasury-gate_page_rtg-assets',
 			'real-treasury-gate_page_rtg-mappings',
+			'real-treasury-gate_page_rtg-leads',
 			'real-treasury-gate_page_rtg-events',
 			'real-treasury-gate_page_rtg-settings',
 		);
@@ -108,6 +109,15 @@ class RTG_Admin {
 			array( __CLASS__, 'render_mappings_page' )
 		);
 
+		add_submenu_page(
+			'rtg-dashboard',
+			esc_html__( 'Leads', 'rt-gate' ),
+			esc_html__( 'Leads', 'rt-gate' ),
+			'manage_options',
+			'rtg-leads',
+			array( __CLASS__, 'render_leads_page' )
+		);
+
 		if ( class_exists( 'RTG_Events' ) ) {
 			RTG_Events::register_submenu();
 		}
@@ -130,6 +140,15 @@ class RTG_Admin {
 	public static function handle_form_actions() {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
+		}
+
+		// Handle GET-based export actions.
+		$page   = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$action = isset( $_GET['rtg_action'] ) ? sanitize_key( wp_unslash( $_GET['rtg_action'] ) ) : '';
+		if ( 'rtg-leads' === $page && 'export_leads_csv' === $action ) {
+			check_admin_referer( 'rtg_export_leads_csv' );
+			self::export_leads_csv();
+			exit;
 		}
 
 		if ( ! isset( $_POST['rtg_action'] ) ) {
@@ -411,8 +430,10 @@ class RTG_Admin {
 					</a>
 				</div>
 				<div class="rtg-stat-card">
-					<span class="rtg-stat-number"><?php echo esc_html( $total_leads ); ?></span>
-					<span class="rtg-stat-label"><?php echo esc_html__( 'Leads', 'rt-gate' ); ?></span>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-leads' ) ); ?>">
+						<span class="rtg-stat-number"><?php echo esc_html( $total_leads ); ?></span>
+						<span class="rtg-stat-label"><?php echo esc_html__( 'Leads', 'rt-gate' ); ?></span>
+					</a>
 				</div>
 				<div class="rtg-stat-card">
 					<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-events' ) ); ?>">
@@ -596,11 +617,11 @@ class RTG_Admin {
 					var quickPhoneButton = document.getElementById('rtg_add_phone_field');
 					var quickUserTypeButton = document.getElementById('rtg_add_user_type_field');
 					var userTypeOptions = [
-						'Corporate treasury practitioner',
-						'Consultant',
-						'Tech vendor',
-						'Finance',
-						'Other'
+						'Corporate treasury professional (current system in place)',
+						'Corporate treasury professional (planning a system change)',
+						'Corporate treasury professional (early research / alignment)',
+						'Treasury technology provider',
+						'Treasury or finance consultant'
 					];
 
 					if (!rowsContainer || !jsonTextarea || !formElement || !addButton || !loadButton || !applyButton) {
@@ -1245,6 +1266,356 @@ class RTG_Admin {
 	}
 
 	/**
+	 * Render the leads management page.
+	 *
+	 * @return void
+	 */
+	public static function render_leads_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to access this page.', 'rt-gate' ) );
+		}
+
+		$lead_id = isset( $_GET['lead_id'] ) ? absint( wp_unslash( $_GET['lead_id'] ) ) : 0;
+		if ( $lead_id > 0 ) {
+			self::render_lead_detail( $lead_id );
+			return;
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/class-wp-list-table.php';
+
+		$table = new RTG_Leads_List_Table();
+		$table->prepare_items();
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html__( 'Leads', 'rt-gate' ); ?></h1>
+			<p>
+				<a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=rtg-leads&rtg_action=export_leads_csv' ), 'rtg_export_leads_csv' ) ); ?>">
+					<?php echo esc_html__( 'Export CSV', 'rt-gate' ); ?>
+				</a>
+			</p>
+			<form method="get">
+				<input type="hidden" name="page" value="rtg-leads" />
+				<?php $table->search_box( esc_html__( 'Search Email', 'rt-gate' ), 'rtg-leads' ); ?>
+				<?php $table->display(); ?>
+			</form>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render detail view for a single lead.
+	 *
+	 * @param int $lead_id Lead ID.
+	 * @return void
+	 */
+	private static function render_lead_detail( $lead_id ) {
+		global $wpdb;
+
+		$leads_table = $wpdb->prefix . 'rtg_leads';
+		$lead        = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$leads_table} WHERE id = %d", $lead_id ) );
+
+		if ( ! $lead ) {
+			echo '<div class="wrap"><h1>' . esc_html__( 'Lead Not Found', 'rt-gate' ) . '</h1></div>';
+			return;
+		}
+
+		$form_data = json_decode( (string) $lead->form_data, true );
+		if ( ! is_array( $form_data ) ) {
+			$form_data = array();
+		}
+
+		$events_table = $wpdb->prefix . 'rtg_events';
+		$forms_table  = $wpdb->prefix . 'rtg_forms';
+		$assets_table = $wpdb->prefix . 'rtg_assets';
+
+		$events = $wpdb->get_results( $wpdb->prepare(
+			"SELECT e.id, e.event_type, e.meta, e.created_at,
+				COALESCE(f.name, '') AS form_name,
+				COALESCE(a.name, '') AS asset_name,
+				COALESCE(a.type, '') AS asset_type
+			FROM {$events_table} e
+			LEFT JOIN {$forms_table} f ON f.id = e.form_id
+			LEFT JOIN {$assets_table} a ON a.id = e.asset_id
+			WHERE e.lead_id = %d
+			ORDER BY e.id DESC",
+			$lead_id
+		) );
+
+		$accessed_assets = $wpdb->get_results( $wpdb->prepare(
+			"SELECT a.name, a.type, a.slug,
+				GROUP_CONCAT(DISTINCT e.event_type ORDER BY e.event_type SEPARATOR ', ') AS event_types
+			FROM {$events_table} e
+			INNER JOIN {$assets_table} a ON a.id = e.asset_id
+			WHERE e.lead_id = %d AND e.asset_id > 0
+			GROUP BY a.id, a.name, a.type, a.slug
+			ORDER BY a.name ASC",
+			$lead_id
+		) );
+		?>
+		<div class="wrap">
+			<p>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-leads' ) ); ?>">&larr; <?php echo esc_html__( 'Back to Leads', 'rt-gate' ); ?></a>
+			</p>
+			<h1><?php echo esc_html( $lead->email ); ?></h1>
+
+			<div class="rtg-lead-detail-grid">
+				<div class="rtg-card">
+					<h3><?php echo esc_html__( 'Form Data', 'rt-gate' ); ?></h3>
+					<table class="widefat striped">
+						<tbody>
+							<?php if ( ! empty( $form_data ) ) : ?>
+								<?php foreach ( $form_data as $key => $value ) : ?>
+									<tr>
+										<th style="width:30%"><?php echo esc_html( ucwords( str_replace( '_', ' ', $key ) ) ); ?></th>
+										<td><?php echo esc_html( is_array( $value ) ? implode( ', ', $value ) : (string) $value ); ?></td>
+									</tr>
+								<?php endforeach; ?>
+							<?php else : ?>
+								<tr><td><?php echo esc_html__( 'No form data recorded.', 'rt-gate' ); ?></td></tr>
+							<?php endif; ?>
+							<tr>
+								<th><?php echo esc_html__( 'Created', 'rt-gate' ); ?></th>
+								<td><?php echo esc_html( $lead->created_at ); ?></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+
+				<div class="rtg-card">
+					<h3><?php echo esc_html__( 'Assets Accessed', 'rt-gate' ); ?></h3>
+					<?php if ( ! empty( $accessed_assets ) ) : ?>
+						<table class="widefat striped">
+							<thead>
+								<tr>
+									<th><?php echo esc_html__( 'Asset', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Type', 'rt-gate' ); ?></th>
+									<th><?php echo esc_html__( 'Interactions', 'rt-gate' ); ?></th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( $accessed_assets as $asset ) : ?>
+									<tr>
+										<td><?php echo esc_html( $asset->name ); ?></td>
+										<td><?php echo esc_html( ucfirst( $asset->type ) ); ?></td>
+										<td><?php echo esc_html( $asset->event_types ); ?></td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					<?php else : ?>
+						<p><?php echo esc_html__( 'No assets accessed yet.', 'rt-gate' ); ?></p>
+					<?php endif; ?>
+				</div>
+			</div>
+
+			<div class="rtg-card" style="margin-top: 20px;">
+				<h3><?php echo esc_html__( 'Activity Timeline', 'rt-gate' ); ?></h3>
+				<?php if ( ! empty( $events ) ) : ?>
+					<table class="widefat striped">
+						<thead>
+							<tr>
+								<th><?php echo esc_html__( 'Event', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Form', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Asset', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Details', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Date', 'rt-gate' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $events as $event ) : ?>
+								<?php
+								$meta         = json_decode( (string) $event->meta, true );
+								$meta_display = '';
+								if ( is_array( $meta ) ) {
+									unset( $meta['request_ip_hash'], $meta['request_ua_hash'] );
+									if ( ! empty( $meta ) ) {
+										$meta_display = wp_json_encode( $meta );
+									}
+								}
+								?>
+								<tr>
+									<td><span class="rtg-event-badge rtg-event-<?php echo esc_attr( $event->event_type ); ?>"><?php echo esc_html( $event->event_type ); ?></span></td>
+									<td><?php echo esc_html( $event->form_name ); ?></td>
+									<td><?php echo esc_html( $event->asset_name ); ?></td>
+									<td><?php if ( $meta_display ) : ?><code><?php echo esc_html( $meta_display ); ?></code><?php endif; ?></td>
+									<td><?php echo esc_html( $event->created_at ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				<?php else : ?>
+					<p><?php echo esc_html__( 'No activity recorded yet.', 'rt-gate' ); ?></p>
+				<?php endif; ?>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Query leads with current filters.
+	 *
+	 * @param int $limit  Row limit (-1 for unlimited).
+	 * @param int $offset Row offset.
+	 * @return array
+	 */
+	public static function query_leads( $limit = 20, $offset = 0 ) {
+		global $wpdb;
+
+		$leads_table  = $wpdb->prefix . 'rtg_leads';
+		$events_table = $wpdb->prefix . 'rtg_events';
+		$forms_table  = $wpdb->prefix . 'rtg_forms';
+
+		$where_sql = array( '1=1' );
+		$params    = array();
+
+		$email = isset( $_REQUEST['s'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['s'] ) ) : '';
+		if ( ! empty( $email ) ) {
+			$where_sql[] = 'l.email LIKE %s';
+			$params[]    = '%' . $wpdb->esc_like( $email ) . '%';
+		}
+
+		$form_id = isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0;
+		if ( $form_id > 0 ) {
+			$where_sql[] = "l.id IN (SELECT DISTINCT e2.lead_id FROM {$events_table} e2 WHERE e2.form_id = %d AND e2.event_type = %s)";
+			$params[]    = $form_id;
+			$params[]    = 'form_submit';
+		}
+
+		$user_type = isset( $_GET['user_type'] ) ? sanitize_text_field( wp_unslash( $_GET['user_type'] ) ) : '';
+		if ( ! empty( $user_type ) ) {
+			$where_sql[] = 'l.form_data LIKE %s';
+			$params[]    = '%' . $wpdb->esc_like( $user_type ) . '%';
+		}
+
+		$orderby         = 'l.created_at';
+		$order           = 'DESC';
+		$allowed_orderby = array( 'email' => 'l.email', 'created_at' => 'l.created_at' );
+		if ( isset( $_GET['orderby'] ) && isset( $allowed_orderby[ sanitize_key( $_GET['orderby'] ) ] ) ) {
+			$orderby = $allowed_orderby[ sanitize_key( $_GET['orderby'] ) ];
+		}
+		if ( isset( $_GET['order'] ) && 'asc' === strtolower( sanitize_key( $_GET['order'] ) ) ) {
+			$order = 'ASC';
+		}
+
+		$sql = "SELECT l.id, l.email, l.form_data, l.created_at,
+			(SELECT COUNT(DISTINCT e.asset_id) FROM {$events_table} e WHERE e.lead_id = l.id AND e.asset_id > 0) AS assets_accessed,
+			(SELECT MAX(e.created_at) FROM {$events_table} e WHERE e.lead_id = l.id) AS last_activity,
+			(SELECT GROUP_CONCAT(DISTINCT f.name SEPARATOR ', ')
+				FROM {$events_table} e
+				INNER JOIN {$forms_table} f ON f.id = e.form_id
+				WHERE e.lead_id = l.id AND e.event_type = 'form_submit') AS form_names
+			FROM {$leads_table} l
+			WHERE " . implode( ' AND ', $where_sql ) . "
+			ORDER BY {$orderby} {$order}";
+
+		if ( $limit > 0 ) {
+			$sql   .= $wpdb->prepare( ' LIMIT %d OFFSET %d', absint( $limit ), absint( $offset ) );
+		}
+
+		if ( empty( $params ) ) {
+			return $wpdb->get_results( $sql );
+		}
+
+		return $wpdb->get_results( $wpdb->prepare( $sql, $params ) );
+	}
+
+	/**
+	 * Count leads with current filters.
+	 *
+	 * @return int
+	 */
+	public static function count_leads() {
+		global $wpdb;
+
+		$leads_table  = $wpdb->prefix . 'rtg_leads';
+		$events_table = $wpdb->prefix . 'rtg_events';
+
+		$where_sql = array( '1=1' );
+		$params    = array();
+
+		$email = isset( $_REQUEST['s'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['s'] ) ) : '';
+		if ( ! empty( $email ) ) {
+			$where_sql[] = 'l.email LIKE %s';
+			$params[]    = '%' . $wpdb->esc_like( $email ) . '%';
+		}
+
+		$form_id = isset( $_GET['form_id'] ) ? absint( wp_unslash( $_GET['form_id'] ) ) : 0;
+		if ( $form_id > 0 ) {
+			$where_sql[] = "l.id IN (SELECT DISTINCT e2.lead_id FROM {$events_table} e2 WHERE e2.form_id = %d AND e2.event_type = %s)";
+			$params[]    = $form_id;
+			$params[]    = 'form_submit';
+		}
+
+		$user_type = isset( $_GET['user_type'] ) ? sanitize_text_field( wp_unslash( $_GET['user_type'] ) ) : '';
+		if ( ! empty( $user_type ) ) {
+			$where_sql[] = 'l.form_data LIKE %s';
+			$params[]    = '%' . $wpdb->esc_like( $user_type ) . '%';
+		}
+
+		$sql = "SELECT COUNT(*) FROM {$leads_table} l WHERE " . implode( ' AND ', $where_sql );
+
+		if ( empty( $params ) ) {
+			return (int) $wpdb->get_var( $sql );
+		}
+
+		return (int) $wpdb->get_var( $wpdb->prepare( $sql, $params ) );
+	}
+
+	/**
+	 * Export filtered leads as CSV.
+	 *
+	 * @return void
+	 */
+	private static function export_leads_csv() {
+		$rows = self::query_leads( -1, 0 );
+
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=rtg-leads-' . gmdate( 'Ymd-His' ) . '.csv' );
+
+		$fp = fopen( 'php://output', 'w' );
+		if ( false === $fp ) {
+			return;
+		}
+
+		fputcsv( $fp, array( 'id', 'email', 'name', 'company', 'user_type', 'form_data', 'form', 'assets_accessed', 'last_activity', 'created_at' ) );
+
+		foreach ( $rows as $row ) {
+			$form_data = json_decode( (string) $row->form_data, true );
+			if ( ! is_array( $form_data ) ) {
+				$form_data = array();
+			}
+
+			$name = '';
+			if ( ! empty( $form_data['full_name'] ) ) {
+				$name = $form_data['full_name'];
+			} elseif ( ! empty( $form_data['first_name'] ) ) {
+				$name = $form_data['first_name'];
+				if ( ! empty( $form_data['last_name'] ) ) {
+					$name .= ' ' . $form_data['last_name'];
+				}
+			}
+
+			fputcsv(
+				$fp,
+				array(
+					(int) $row->id,
+					(string) $row->email,
+					$name,
+					isset( $form_data['company'] ) ? (string) $form_data['company'] : '',
+					isset( $form_data['user_type'] ) ? (string) $form_data['user_type'] : '',
+					(string) $row->form_data,
+					isset( $row->form_names ) ? (string) $row->form_names : '',
+					isset( $row->assets_accessed ) ? (int) $row->assets_accessed : 0,
+					isset( $row->last_activity ) ? (string) $row->last_activity : '',
+					(string) $row->created_at,
+				)
+			);
+		}
+
+		fclose( $fp );
+	}
+
+	/**
 	 * Render admin notice from query parameter.
 	 *
 	 * @return void
@@ -1264,3 +1635,162 @@ class RTG_Admin {
 }
 
 RTG_Admin::init();
+
+if ( is_admin() ) {
+	require_once ABSPATH . 'wp-admin/includes/class-wp-list-table.php';
+}
+
+if ( class_exists( 'WP_List_Table' ) ) {
+	/**
+	 * Leads list table for the admin Leads page.
+	 */
+	class RTG_Leads_List_Table extends WP_List_Table {
+		/**
+		 * Define table columns.
+		 *
+		 * @return array
+		 */
+		public function get_columns() {
+			return array(
+				'email'           => esc_html__( 'Email', 'rt-gate' ),
+				'name'            => esc_html__( 'Name', 'rt-gate' ),
+				'company'         => esc_html__( 'Company', 'rt-gate' ),
+				'user_type'       => esc_html__( 'User Type', 'rt-gate' ),
+				'form_name'       => esc_html__( 'Form', 'rt-gate' ),
+				'assets_accessed' => esc_html__( 'Assets', 'rt-gate' ),
+				'last_activity'   => esc_html__( 'Last Activity', 'rt-gate' ),
+				'created_at'      => esc_html__( 'Created', 'rt-gate' ),
+			);
+		}
+
+		/**
+		 * Define sortable columns.
+		 *
+		 * @return array
+		 */
+		public function get_sortable_columns() {
+			return array(
+				'email'      => array( 'email', false ),
+				'created_at' => array( 'created_at', true ),
+			);
+		}
+
+		/**
+		 * Prepare table items with pagination.
+		 *
+		 * @return void
+		 */
+		public function prepare_items() {
+			$per_page     = 20;
+			$current_page = $this->get_pagenum();
+			$offset       = ( $current_page - 1 ) * $per_page;
+
+			$this->items = RTG_Admin::query_leads( $per_page, $offset );
+			$total_items = RTG_Admin::count_leads();
+
+			$this->set_pagination_args(
+				array(
+					'total_items' => $total_items,
+					'per_page'    => $per_page,
+				)
+			);
+		}
+
+		/**
+		 * Render dropdown filters above the table.
+		 *
+		 * @param string $which Top or bottom.
+		 * @return void
+		 */
+		protected function extra_tablenav( $which ) {
+			if ( 'top' !== $which ) {
+				return;
+			}
+
+			global $wpdb;
+			$forms = $wpdb->get_results( "SELECT id, name FROM {$wpdb->prefix}rtg_forms ORDER BY name ASC" );
+
+			$current_form_id   = isset( $_GET['form_id'] ) ? absint( $_GET['form_id'] ) : 0;
+			$current_user_type = isset( $_GET['user_type'] ) ? sanitize_text_field( wp_unslash( $_GET['user_type'] ) ) : '';
+
+			$user_type_options = array(
+				'Corporate treasury professional (current system in place)',
+				'Corporate treasury professional (planning a system change)',
+				'Corporate treasury professional (early research / alignment)',
+				'Treasury technology provider',
+				'Treasury or finance consultant',
+			);
+			?>
+			<div class="rtg-events-filters">
+				<select name="form_id">
+					<option value=""><?php echo esc_html__( 'All Forms', 'rt-gate' ); ?></option>
+					<?php foreach ( $forms as $form ) : ?>
+						<option value="<?php echo esc_attr( $form->id ); ?>" <?php selected( $current_form_id, (int) $form->id ); ?>><?php echo esc_html( $form->name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+
+				<select name="user_type">
+					<option value=""><?php echo esc_html__( 'All User Types', 'rt-gate' ); ?></option>
+					<?php foreach ( $user_type_options as $ut ) : ?>
+						<option value="<?php echo esc_attr( $ut ); ?>" <?php selected( $current_user_type, $ut ); ?>><?php echo esc_html( $ut ); ?></option>
+					<?php endforeach; ?>
+				</select>
+
+				<?php submit_button( esc_html__( 'Filter', 'rt-gate' ), '', '', false ); ?>
+			</div>
+			<?php
+		}
+
+		/**
+		 * Render individual column values.
+		 *
+		 * @param object $item        Row data.
+		 * @param string $column_name Column key.
+		 * @return string
+		 */
+		public function column_default( $item, $column_name ) {
+			$form_data = json_decode( (string) $item->form_data, true );
+			if ( ! is_array( $form_data ) ) {
+				$form_data = array();
+			}
+
+			switch ( $column_name ) {
+				case 'email':
+					$url = admin_url( 'admin.php?page=rtg-leads&lead_id=' . absint( $item->id ) );
+					return '<a href="' . esc_url( $url ) . '"><strong>' . esc_html( $item->email ) . '</strong></a>';
+
+				case 'name':
+					$name = '';
+					if ( ! empty( $form_data['full_name'] ) ) {
+						$name = $form_data['full_name'];
+					} elseif ( ! empty( $form_data['first_name'] ) ) {
+						$name = $form_data['first_name'];
+						if ( ! empty( $form_data['last_name'] ) ) {
+							$name .= ' ' . $form_data['last_name'];
+						}
+					}
+					return esc_html( $name );
+
+				case 'company':
+					return esc_html( isset( $form_data['company'] ) ? $form_data['company'] : '' );
+
+				case 'user_type':
+					return esc_html( isset( $form_data['user_type'] ) ? $form_data['user_type'] : '' );
+
+				case 'form_name':
+					return esc_html( ! empty( $item->form_names ) ? $item->form_names : '-' );
+
+				case 'assets_accessed':
+					return esc_html( absint( isset( $item->assets_accessed ) ? $item->assets_accessed : 0 ) );
+
+				case 'last_activity':
+					return esc_html( ! empty( $item->last_activity ) ? $item->last_activity : '-' );
+
+				case 'created_at':
+					return esc_html( $item->created_at );
+			}
+
+			return '';
+		}
+	}
+}
