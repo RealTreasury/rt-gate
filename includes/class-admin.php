@@ -396,6 +396,7 @@ class RTG_Admin {
 		$total_assets  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}rtg_assets" );
 		$total_leads   = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}rtg_leads" );
 		$total_events  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}rtg_events" );
+		$total_mappings = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}rtg_mappings" );
 		$active_tokens = (int) $wpdb->get_var( $wpdb->prepare(
 			"SELECT COUNT(*) FROM {$wpdb->prefix}rtg_tokens WHERE expires_at > %s",
 			gmdate( 'Y-m-d H:i:s' )
@@ -412,68 +413,208 @@ class RTG_Admin {
 			LEFT JOIN {$wpdb->prefix}rtg_assets a ON a.id = e.asset_id
 			ORDER BY e.id DESC LIMIT 10"
 		);
-		?>
-		<div class="wrap">
-			<h1><?php echo esc_html__( 'Real Treasury Gate — Dashboard', 'rt-gate' ); ?></h1>
 
-			<div class="rtg-dashboard-grid">
+		$recent_leads = $wpdb->get_results(
+			"SELECT l.id, l.email, l.form_data, l.created_at
+			FROM {$wpdb->prefix}rtg_leads l
+			ORDER BY l.id DESC LIMIT 5"
+		);
+		?>
+		<div class="wrap rtg-dashboard-wrap">
+			<h1><?php echo esc_html__( 'Real Treasury Gate', 'rt-gate' ); ?></h1>
+			<p class="rtg-dashboard-subtitle"><?php echo esc_html__( 'Manage your gated content, track leads, and monitor engagement.', 'rt-gate' ); ?></p>
+
+			<div class="rtg-stats-row">
 				<div class="rtg-stat-card">
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-forms' ) ); ?>">
-						<span class="rtg-stat-number"><?php echo esc_html( $total_forms ); ?></span>
-						<span class="rtg-stat-label"><?php echo esc_html__( 'Forms', 'rt-gate' ); ?></span>
-					</a>
+					<span class="rtg-stat-number"><?php echo esc_html( $total_leads ); ?></span>
+					<span class="rtg-stat-label"><?php echo esc_html__( 'Total Leads', 'rt-gate' ); ?></span>
 				</div>
 				<div class="rtg-stat-card">
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-assets' ) ); ?>">
-						<span class="rtg-stat-number"><?php echo esc_html( $total_assets ); ?></span>
-						<span class="rtg-stat-label"><?php echo esc_html__( 'Assets', 'rt-gate' ); ?></span>
-					</a>
-				</div>
-				<div class="rtg-stat-card">
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-leads' ) ); ?>">
-						<span class="rtg-stat-number"><?php echo esc_html( $total_leads ); ?></span>
-						<span class="rtg-stat-label"><?php echo esc_html__( 'Leads', 'rt-gate' ); ?></span>
-					</a>
-				</div>
-				<div class="rtg-stat-card">
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-events' ) ); ?>">
-						<span class="rtg-stat-number"><?php echo esc_html( $total_events ); ?></span>
-						<span class="rtg-stat-label"><?php echo esc_html__( 'Events', 'rt-gate' ); ?></span>
-					</a>
+					<span class="rtg-stat-number"><?php echo esc_html( $total_events ); ?></span>
+					<span class="rtg-stat-label"><?php echo esc_html__( 'Total Events', 'rt-gate' ); ?></span>
 				</div>
 				<div class="rtg-stat-card">
 					<span class="rtg-stat-number"><?php echo esc_html( $active_tokens ); ?></span>
 					<span class="rtg-stat-label"><?php echo esc_html__( 'Active Tokens', 'rt-gate' ); ?></span>
 				</div>
+				<div class="rtg-stat-card">
+					<span class="rtg-stat-number"><?php echo esc_html( $total_forms ); ?></span>
+					<span class="rtg-stat-label"><?php echo esc_html__( 'Forms', 'rt-gate' ); ?></span>
+				</div>
+				<div class="rtg-stat-card">
+					<span class="rtg-stat-number"><?php echo esc_html( $total_assets ); ?></span>
+					<span class="rtg-stat-label"><?php echo esc_html__( 'Assets', 'rt-gate' ); ?></span>
+				</div>
 			</div>
 
-			<h2><?php echo esc_html__( 'Recent Events', 'rt-gate' ); ?></h2>
-			<table class="widefat striped">
-				<thead>
-					<tr>
-						<th><?php echo esc_html__( 'Email', 'rt-gate' ); ?></th>
-						<th><?php echo esc_html__( 'Form', 'rt-gate' ); ?></th>
-						<th><?php echo esc_html__( 'Asset', 'rt-gate' ); ?></th>
-						<th><?php echo esc_html__( 'Event Type', 'rt-gate' ); ?></th>
-						<th><?php echo esc_html__( 'Created', 'rt-gate' ); ?></th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php if ( ! empty( $recent_events ) ) : ?>
-						<?php foreach ( $recent_events as $event ) : ?>
+			<h2 class="rtg-section-title"><?php echo esc_html__( 'Quick Access', 'rt-gate' ); ?></h2>
+			<div class="rtg-nav-grid">
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-leads' ) ); ?>" class="rtg-nav-card">
+					<span class="dashicons dashicons-groups rtg-nav-icon"></span>
+					<div class="rtg-nav-content">
+						<strong class="rtg-nav-title"><?php echo esc_html__( 'Leads', 'rt-gate' ); ?></strong>
+						<span class="rtg-nav-desc"><?php echo esc_html__( 'View all captured leads, filter by form or user type, and export to CSV.', 'rt-gate' ); ?></span>
+						<span class="rtg-nav-count">
+							<?php
+							printf(
+								/* translators: %d: number of leads */
+								esc_html( _n( '%d lead', '%d leads', $total_leads, 'rt-gate' ) ),
+								$total_leads
+							);
+							?>
+						</span>
+					</div>
+				</a>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-events' ) ); ?>" class="rtg-nav-card">
+					<span class="dashicons dashicons-chart-line rtg-nav-icon"></span>
+					<div class="rtg-nav-content">
+						<strong class="rtg-nav-title"><?php echo esc_html__( 'Events', 'rt-gate' ); ?></strong>
+						<span class="rtg-nav-desc"><?php echo esc_html__( 'Track form submissions, downloads, video plays, and page views.', 'rt-gate' ); ?></span>
+						<span class="rtg-nav-count">
+							<?php
+							printf(
+								/* translators: %d: number of events */
+								esc_html( _n( '%d event', '%d events', $total_events, 'rt-gate' ) ),
+								$total_events
+							);
+							?>
+						</span>
+					</div>
+				</a>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-forms' ) ); ?>" class="rtg-nav-card">
+					<span class="dashicons dashicons-feedback rtg-nav-icon"></span>
+					<div class="rtg-nav-content">
+						<strong class="rtg-nav-title"><?php echo esc_html__( 'Forms', 'rt-gate' ); ?></strong>
+						<span class="rtg-nav-desc"><?php echo esc_html__( 'Create and manage gated content forms with the no-code builder.', 'rt-gate' ); ?></span>
+						<span class="rtg-nav-count">
+							<?php
+							printf(
+								/* translators: %d: number of forms */
+								esc_html( _n( '%d form', '%d forms', $total_forms, 'rt-gate' ) ),
+								$total_forms
+							);
+							?>
+						</span>
+					</div>
+				</a>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-assets' ) ); ?>" class="rtg-nav-card">
+					<span class="dashicons dashicons-media-document rtg-nav-icon"></span>
+					<div class="rtg-nav-content">
+						<strong class="rtg-nav-title"><?php echo esc_html__( 'Assets', 'rt-gate' ); ?></strong>
+						<span class="rtg-nav-desc"><?php echo esc_html__( 'Manage downloads, videos, and links that are gated behind forms.', 'rt-gate' ); ?></span>
+						<span class="rtg-nav-count">
+							<?php
+							printf(
+								/* translators: %d: number of assets */
+								esc_html( _n( '%d asset', '%d assets', $total_assets, 'rt-gate' ) ),
+								$total_assets
+							);
+							?>
+						</span>
+					</div>
+				</a>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-mappings' ) ); ?>" class="rtg-nav-card">
+					<span class="dashicons dashicons-randomize rtg-nav-icon"></span>
+					<div class="rtg-nav-content">
+						<strong class="rtg-nav-title"><?php echo esc_html__( 'Mappings', 'rt-gate' ); ?></strong>
+						<span class="rtg-nav-desc"><?php echo esc_html__( 'Connect forms to assets and configure iframe templates.', 'rt-gate' ); ?></span>
+						<span class="rtg-nav-count">
+							<?php
+							printf(
+								/* translators: %d: number of mappings */
+								esc_html( _n( '%d mapping', '%d mappings', $total_mappings, 'rt-gate' ) ),
+								$total_mappings
+							);
+							?>
+						</span>
+					</div>
+				</a>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-settings' ) ); ?>" class="rtg-nav-card">
+					<span class="dashicons dashicons-admin-settings rtg-nav-icon"></span>
+					<div class="rtg-nav-content">
+						<strong class="rtg-nav-title"><?php echo esc_html__( 'Settings', 'rt-gate' ); ?></strong>
+						<span class="rtg-nav-desc"><?php echo esc_html__( 'Configure token TTL, CORS origins, and webhook integrations.', 'rt-gate' ); ?></span>
+					</div>
+				</a>
+			</div>
+
+			<div class="rtg-dashboard-panels">
+				<div class="rtg-card">
+					<div class="rtg-card-header">
+						<h2><?php echo esc_html__( 'Recent Events', 'rt-gate' ); ?></h2>
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-events' ) ); ?>" class="button button-small"><?php echo esc_html__( 'View All Events', 'rt-gate' ); ?></a>
+					</div>
+					<table class="widefat striped">
+						<thead>
 							<tr>
-								<td><?php echo esc_html( $event->email ); ?></td>
-								<td><?php echo esc_html( $event->form_name ); ?></td>
-								<td><?php echo esc_html( $event->asset_name ); ?></td>
-								<td><?php echo esc_html( $event->event_type ); ?></td>
-								<td><?php echo esc_html( $event->created_at ); ?></td>
+								<th><?php echo esc_html__( 'Email', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Form', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Asset', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Event Type', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Date', 'rt-gate' ); ?></th>
 							</tr>
-						<?php endforeach; ?>
-					<?php else : ?>
-						<tr><td colspan="5"><?php echo esc_html__( 'No events recorded yet.', 'rt-gate' ); ?></td></tr>
-					<?php endif; ?>
-				</tbody>
-			</table>
+						</thead>
+						<tbody>
+							<?php if ( ! empty( $recent_events ) ) : ?>
+								<?php foreach ( $recent_events as $event ) : ?>
+									<tr>
+										<td><?php echo esc_html( $event->email ); ?></td>
+										<td><?php echo esc_html( $event->form_name ); ?></td>
+										<td><?php echo esc_html( $event->asset_name ); ?></td>
+										<td><span class="rtg-event-badge rtg-event-<?php echo esc_attr( $event->event_type ); ?>"><?php echo esc_html( $event->event_type ); ?></span></td>
+										<td><?php echo esc_html( $event->created_at ); ?></td>
+									</tr>
+								<?php endforeach; ?>
+							<?php else : ?>
+								<tr><td colspan="5"><?php echo esc_html__( 'No events recorded yet.', 'rt-gate' ); ?></td></tr>
+							<?php endif; ?>
+						</tbody>
+					</table>
+				</div>
+
+				<div class="rtg-card">
+					<div class="rtg-card-header">
+						<h2><?php echo esc_html__( 'Recent Leads', 'rt-gate' ); ?></h2>
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-leads' ) ); ?>" class="button button-small"><?php echo esc_html__( 'View All Leads', 'rt-gate' ); ?></a>
+					</div>
+					<table class="widefat striped">
+						<thead>
+							<tr>
+								<th><?php echo esc_html__( 'Email', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Name', 'rt-gate' ); ?></th>
+								<th><?php echo esc_html__( 'Date', 'rt-gate' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php if ( ! empty( $recent_leads ) ) : ?>
+								<?php foreach ( $recent_leads as $lead ) : ?>
+									<?php
+									$lead_form_data = json_decode( (string) $lead->form_data, true );
+									$lead_name      = '';
+									if ( is_array( $lead_form_data ) ) {
+										if ( ! empty( $lead_form_data['full_name'] ) ) {
+											$lead_name = $lead_form_data['full_name'];
+										} elseif ( ! empty( $lead_form_data['first_name'] ) ) {
+											$lead_name = $lead_form_data['first_name'];
+											if ( ! empty( $lead_form_data['last_name'] ) ) {
+												$lead_name .= ' ' . $lead_form_data['last_name'];
+											}
+										}
+									}
+									?>
+									<tr>
+										<td><a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-leads&lead_id=' . absint( $lead->id ) ) ); ?>"><?php echo esc_html( $lead->email ); ?></a></td>
+										<td><?php echo esc_html( $lead_name ); ?></td>
+										<td><?php echo esc_html( $lead->created_at ); ?></td>
+									</tr>
+								<?php endforeach; ?>
+							<?php else : ?>
+								<tr><td colspan="3"><?php echo esc_html__( 'No leads captured yet.', 'rt-gate' ); ?></td></tr>
+							<?php endif; ?>
+						</tbody>
+					</table>
+				</div>
+			</div>
 		</div>
 		<?php
 	}
