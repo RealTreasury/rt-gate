@@ -1107,10 +1107,10 @@ class RTG_Admin {
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="rtg_iframe_src_template"><?php echo esc_html__( 'Iframe Source Template', 'rt-gate' ); ?></label></th>
+						<th scope="row"><label for="rtg_iframe_src_template"><?php echo esc_html__( 'Iframe Source Template (optional)', 'rt-gate' ); ?></label></th>
 						<td>
-							<input id="rtg_iframe_src_template" name="iframe_src_template" type="text" class="large-text" value="<?php echo esc_attr( $record ? $record->iframe_src_template : '' ); ?>" required placeholder="https://yoursite.github.io/gate/?asset={asset_slug}&t={token}" />
-							<p class="description"><?php echo esc_html__( 'URL template for the gated iframe. Available placeholders: {asset_slug} and {token}.', 'rt-gate' ); ?></p>
+							<input id="rtg_iframe_src_template" name="iframe_src_template" type="text" class="large-text" value="<?php echo esc_attr( $record ? $record->iframe_src_template : '' ); ?>" placeholder="https://yoursite.github.io/gate/?asset={asset_slug}&t={token}" />
+							<p class="description"><?php echo esc_html__( 'Optional fallback URL template. The form page can pass its own gate_url at submit time instead. Placeholders: {asset_slug} and {token}.', 'rt-gate' ); ?></p>
 							<p class="description"><?php echo esc_html__( 'Example: https://yoursite.github.io/gate/?asset={asset_slug}&t={token}', 'rt-gate' ); ?></p>
 						</td>
 					</tr>
