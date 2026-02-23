@@ -249,11 +249,12 @@ class RTG_REST {
 		$leads_table = $wpdb->prefix . 'rtg_leads';
 		$ip_hash     = RTG_Utils::hash_ip( self::get_request_ip() );
 		$ua_hash     = RTG_Utils::hash_user_agent( self::get_user_agent() );
-		$form_data   = wp_json_encode( $fields );
+		$submitted_at = gmdate( 'Y-m-d\TH:i:s\Z' );
 
-		$lead_row = $wpdb->get_row( $wpdb->prepare( "SELECT id FROM {$leads_table} WHERE email = %s", $email ) );
+		$lead_row = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_data FROM {$leads_table} WHERE email = %s", $email ) );
 		if ( $lead_row && ! empty( $lead_row->id ) ) {
 			$lead_id = (int) $lead_row->id;
+			$form_data = self::build_form_data_payload( $lead_row->form_data, $form_id, $fields, $submitted_at );
 			$wpdb->update(
 				$leads_table,
 				array(
@@ -266,6 +267,7 @@ class RTG_REST {
 				array( '%d' )
 			);
 		} else {
+			$form_data = self::build_form_data_payload( null, $form_id, $fields, $submitted_at );
 			$wpdb->insert(
 				$leads_table,
 				array(
@@ -624,6 +626,85 @@ class RTG_REST {
 		}
 
 		return trim( (string) $honeypot );
+	}
+
+	/**
+	 * Build lead form_data payload with backward-compatible latest and history.
+	 *
+	 * @param string|null $existing_form_data Existing form_data JSON string.
+	 * @param int         $form_id            Submitted form ID.
+	 * @param array       $fields             Submitted form fields.
+	 * @param string      $submitted_at       UTC timestamp in ISO-8601 format.
+	 * @return string
+	 */
+	private static function build_form_data_payload( $existing_form_data, $form_id, array $fields, $submitted_at ) {
+		$payload = self::decode_form_data_payload( $existing_form_data );
+
+		if ( ! isset( $payload['history'] ) || ! is_array( $payload['history'] ) ) {
+			$payload['history'] = array();
+		}
+
+		$form_history_key = (string) absint( $form_id );
+		if ( ! isset( $payload['history'][ $form_history_key ] ) || ! is_array( $payload['history'][ $form_history_key ] ) ) {
+			$payload['history'][ $form_history_key ] = array();
+		}
+
+		$timestamp_key = (string) $submitted_at;
+		$collision     = 1;
+		while ( isset( $payload['history'][ $form_history_key ][ $timestamp_key ] ) ) {
+			$timestamp_key = $submitted_at . '_' . $collision;
+			++$collision;
+		}
+
+		$payload['history'][ $form_history_key ][ $timestamp_key ] = $fields;
+		$payload['latest']                                   = $fields;
+
+		foreach ( $fields as $field_key => $field_value ) {
+			if ( is_string( $field_key ) ) {
+				$payload[ $field_key ] = $field_value;
+			}
+		}
+
+		return wp_json_encode( $payload );
+	}
+
+	/**
+	 * Decode lead form_data payload into a normalized array.
+	 *
+	 * @param string|null $form_data_json Raw form_data JSON.
+	 * @return array
+	 */
+	private static function decode_form_data_payload( $form_data_json ) {
+		$payload = json_decode( (string) $form_data_json, true );
+		if ( ! is_array( $payload ) ) {
+			$payload = array();
+		}
+
+		if ( isset( $payload['latest'] ) && is_array( $payload['latest'] ) ) {
+			return $payload;
+		}
+
+		$legacy_fields = array();
+		foreach ( $payload as $key => $value ) {
+			if ( 'history' !== $key && is_string( $key ) ) {
+				$legacy_fields[ $key ] = $value;
+			}
+		}
+
+		if ( empty( $legacy_fields ) ) {
+			return array(
+				'latest'  => array(),
+				'history' => array(),
+			);
+		}
+
+		return array_merge(
+			$legacy_fields,
+			array(
+				'latest'  => $legacy_fields,
+				'history' => isset( $payload['history'] ) && is_array( $payload['history'] ) ? $payload['history'] : array(),
+			)
+		);
 	}
 
 	/**

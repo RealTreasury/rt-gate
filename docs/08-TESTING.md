@@ -123,3 +123,13 @@ A change is ready when:
 - `delete_event` action validates nonce (`rtg_delete_event_{event_id}`).
 - Events query defaults include `e.is_deleted = 0`.
 - Events admin table exposes `include_deleted` filter for audit-only visibility.
+
+
+### Lead history retention QA script
+
+`wp eval-file examples/qa/lead-history-retention.php` validates:
+
+- Same email submitting different forms retains history under `form_data.history`.
+- `form_data.latest` reflects the most recent submission.
+- Same lead can receive multiple tokens/assets across submissions.
+- Lead list query remains compatible with updated `form_data` shape.

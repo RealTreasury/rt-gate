@@ -422,10 +422,8 @@ class RTG_Admin {
 			self::redirect_with_notice( 'Please provide a valid email address.', true, $lead_id );
 		}
 
-		$form_data = json_decode( (string) $lead->form_data, true );
-		if ( ! is_array( $form_data ) ) {
-			$form_data = array();
-		}
+		$form_payload = self::normalize_form_data_payload( $lead->form_data );
+		$form_data    = self::get_latest_form_fields( $form_payload );
 		$editable_keys = array( 'name', 'company', 'user_type' );
 		foreach ( $editable_keys as $key ) {
 			if ( array_key_exists( $key, $_POST ) ) {
@@ -437,7 +435,7 @@ class RTG_Admin {
 			$leads_table,
 			array(
 				'email'     => $email,
-				'form_data' => wp_json_encode( $form_data ),
+				'form_data' => wp_json_encode( array_merge( $form_payload, array( 'latest' => $form_data ) ) ),
 			),
 			array( 'id' => $lead_id ),
 			array( '%s', '%s' ),
@@ -1598,10 +1596,8 @@ class RTG_Admin {
 			return;
 		}
 
-		$form_data = json_decode( (string) $lead->form_data, true );
-		if ( ! is_array( $form_data ) ) {
-			$form_data = array();
-		}
+		$form_payload = self::normalize_form_data_payload( $lead->form_data );
+		$form_data    = self::get_latest_form_fields( $form_payload );
 
 		$editable_values = array(
 			'name'      => isset( $form_data['name'] ) && is_scalar( $form_data['name'] ) ? (string) $form_data['name'] : '',
@@ -1611,6 +1607,7 @@ class RTG_Admin {
 		$events_table = $wpdb->prefix . 'rtg_events';
 		$forms_table  = $wpdb->prefix . 'rtg_forms';
 		$assets_table = $wpdb->prefix . 'rtg_assets';
+		$tokens_table = $wpdb->prefix . 'rtg_tokens';
 
 		$events = $wpdb->get_results( $wpdb->prepare(
 			"SELECT e.id, e.event_type, e.meta, e.created_at,
@@ -1633,6 +1630,29 @@ class RTG_Admin {
 			WHERE e.lead_id = %d AND e.asset_id > 0
 			GROUP BY a.id, a.name, a.type, a.slug
 			ORDER BY a.name ASC",
+			$lead_id
+		) );
+
+		$submitted_forms = $wpdb->get_results( $wpdb->prepare(
+			"SELECT f.id AS form_id, f.name, COUNT(*) AS submit_count, MAX(e.created_at) AS last_submitted_at
+			FROM {$events_table} e
+			INNER JOIN {$forms_table} f ON f.id = e.form_id
+			WHERE e.lead_id = %d AND e.event_type = 'form_submit'
+			GROUP BY f.id, f.name
+			ORDER BY last_submitted_at DESC",
+			$lead_id
+		) );
+
+		$issued_assets = $wpdb->get_results( $wpdb->prepare(
+			"SELECT a.id AS asset_id, a.name, a.slug, a.type,
+				COUNT(DISTINCT t.id) AS token_count,
+				MAX(t.created_at) AS last_issued_at,
+				MAX(t.expires_at) AS last_expires_at
+			FROM {$tokens_table} t
+			INNER JOIN {$assets_table} a ON a.id = t.asset_id
+			WHERE t.lead_id = %d
+			GROUP BY a.id, a.name, a.slug, a.type
+			ORDER BY last_issued_at DESC",
 			$lead_id
 		) );
 		?>
@@ -1679,14 +1699,14 @@ class RTG_Admin {
 
 			<div class="rtg-lead-detail-grid">
 				<div class="rtg-card">
-					<h3><?php echo esc_html__( 'Form Data', 'rt-gate' ); ?></h3>
+					<h3><?php echo esc_html__( 'Latest Form Data', 'rt-gate' ); ?></h3>
 					<table class="widefat striped">
 						<tbody>
 							<?php if ( ! empty( $form_data ) ) : ?>
 								<?php foreach ( $form_data as $key => $value ) : ?>
 									<tr>
 										<th style="width:30%"><?php echo esc_html( ucwords( str_replace( '_', ' ', $key ) ) ); ?></th>
-										<td><?php echo esc_html( is_array( $value ) ? implode( ', ', $value ) : (string) $value ); ?></td>
+										<td><?php echo esc_html( is_array( $value ) ? wp_json_encode( $value ) : (string) $value ); ?></td>
 									</tr>
 								<?php endforeach; ?>
 							<?php else : ?>
@@ -1701,28 +1721,71 @@ class RTG_Admin {
 				</div>
 
 				<div class="rtg-card">
-					<h3><?php echo esc_html__( 'Assets Accessed', 'rt-gate' ); ?></h3>
-					<?php if ( ! empty( $accessed_assets ) ) : ?>
+					<h3><?php echo esc_html__( 'Forms Submitted', 'rt-gate' ); ?></h3>
+					<?php if ( ! empty( $submitted_forms ) ) : ?>
 						<table class="widefat striped">
-							<thead>
-								<tr>
-									<th><?php echo esc_html__( 'Asset', 'rt-gate' ); ?></th>
-									<th><?php echo esc_html__( 'Type', 'rt-gate' ); ?></th>
-									<th><?php echo esc_html__( 'Interactions', 'rt-gate' ); ?></th>
-								</tr>
-							</thead>
+							<thead><tr><th><?php echo esc_html__( 'Form', 'rt-gate' ); ?></th><th><?php echo esc_html__( 'Submissions', 'rt-gate' ); ?></th><th><?php echo esc_html__( 'Last Submitted', 'rt-gate' ); ?></th></tr></thead>
 							<tbody>
-								<?php foreach ( $accessed_assets as $asset ) : ?>
-									<tr>
-										<td><?php echo esc_html( $asset->name ); ?></td>
-										<td><?php echo esc_html( ucfirst( $asset->type ) ); ?></td>
-										<td><?php echo esc_html( $asset->event_types ); ?></td>
-									</tr>
-								<?php endforeach; ?>
+							<?php foreach ( $submitted_forms as $submitted_form ) : ?>
+								<tr>
+									<td><?php echo esc_html( $submitted_form->name ); ?></td>
+									<td><?php echo esc_html( absint( $submitted_form->submit_count ) ); ?></td>
+									<td><?php echo esc_html( (string) $submitted_form->last_submitted_at ); ?></td>
+								</tr>
+							<?php endforeach; ?>
 							</tbody>
 						</table>
 					<?php else : ?>
-						<p><?php echo esc_html__( 'No assets accessed yet.', 'rt-gate' ); ?></p>
+						<p><?php echo esc_html__( 'No form submissions recorded yet.', 'rt-gate' ); ?></p>
+					<?php endif; ?>
+				</div>
+
+				<div class="rtg-card">
+					<h3><?php echo esc_html__( 'Assets Issued / Accessed', 'rt-gate' ); ?></h3>
+					<?php if ( ! empty( $issued_assets ) || ! empty( $accessed_assets ) ) : ?>
+						<?php if ( ! empty( $issued_assets ) ) : ?>
+							<h4><?php echo esc_html__( 'Issued Tokens', 'rt-gate' ); ?></h4>
+							<table class="widefat striped" style="margin-bottom:12px;">
+								<thead><tr><th><?php echo esc_html__( 'Asset', 'rt-gate' ); ?></th><th><?php echo esc_html__( 'Tokens Issued', 'rt-gate' ); ?></th><th><?php echo esc_html__( 'Last Issued', 'rt-gate' ); ?></th><th><?php echo esc_html__( 'Last Expiry', 'rt-gate' ); ?></th></tr></thead>
+								<tbody>
+								<?php foreach ( $issued_assets as $issued_asset ) : ?>
+									<tr><td><?php echo esc_html( $issued_asset->name ); ?></td><td><?php echo esc_html( absint( $issued_asset->token_count ) ); ?></td><td><?php echo esc_html( (string) $issued_asset->last_issued_at ); ?></td><td><?php echo esc_html( (string) $issued_asset->last_expires_at ); ?></td></tr>
+								<?php endforeach; ?>
+								</tbody>
+							</table>
+						<?php endif; ?>
+						<?php if ( ! empty( $accessed_assets ) ) : ?>
+							<h4><?php echo esc_html__( 'Access Events', 'rt-gate' ); ?></h4>
+							<table class="widefat striped">
+								<thead><tr><th><?php echo esc_html__( 'Asset', 'rt-gate' ); ?></th><th><?php echo esc_html__( 'Type', 'rt-gate' ); ?></th><th><?php echo esc_html__( 'Interactions', 'rt-gate' ); ?></th></tr></thead>
+								<tbody>
+								<?php foreach ( $accessed_assets as $asset ) : ?>
+									<tr><td><?php echo esc_html( $asset->name ); ?></td><td><?php echo esc_html( ucfirst( $asset->type ) ); ?></td><td><?php echo esc_html( $asset->event_types ); ?></td></tr>
+								<?php endforeach; ?>
+								</tbody>
+							</table>
+						<?php endif; ?>
+					<?php else : ?>
+						<p><?php echo esc_html__( 'No assets issued or accessed yet.', 'rt-gate' ); ?></p>
+					<?php endif; ?>
+				</div>
+
+				<div class="rtg-card">
+					<h3><?php echo esc_html__( 'Form Submission History', 'rt-gate' ); ?></h3>
+					<?php if ( ! empty( $form_payload['history'] ) ) : ?>
+						<?php foreach ( $form_payload['history'] as $history_form_id => $history_entries ) : ?>
+							<h4><?php echo esc_html( sprintf( __( 'Form ID %d', 'rt-gate' ), absint( $history_form_id ) ) ); ?></h4>
+							<table class="widefat striped" style="margin-bottom:12px;">
+								<thead><tr><th><?php echo esc_html__( 'Submitted At', 'rt-gate' ); ?></th><th><?php echo esc_html__( 'Payload', 'rt-gate' ); ?></th></tr></thead>
+								<tbody>
+								<?php foreach ( $history_entries as $history_timestamp => $history_payload ) : ?>
+									<tr><td><?php echo esc_html( (string) $history_timestamp ); ?></td><td><code><?php echo esc_html( wp_json_encode( $history_payload ) ); ?></code></td></tr>
+								<?php endforeach; ?>
+								</tbody>
+							</table>
+						<?php endforeach; ?>
+					<?php else : ?>
+						<p><?php echo esc_html__( 'No historical form submissions recorded.', 'rt-gate' ); ?></p>
 					<?php endif; ?>
 				</div>
 			</div>
@@ -1856,20 +1919,10 @@ class RTG_Admin {
 		fputcsv( $fp, array( 'id', 'email', 'name', 'company', 'user_type', 'form_data', 'form', 'assets_accessed', 'last_activity', 'created_at' ) );
 
 		foreach ( $rows as $row ) {
-			$form_data = json_decode( (string) $row->form_data, true );
-			if ( ! is_array( $form_data ) ) {
-				$form_data = array();
-			}
+			$form_payload = self::normalize_form_data_payload( $row->form_data );
+			$form_data    = self::get_latest_form_fields( $form_payload );
 
-			$name = '';
-			if ( ! empty( $form_data['full_name'] ) ) {
-				$name = $form_data['full_name'];
-			} elseif ( ! empty( $form_data['first_name'] ) ) {
-				$name = $form_data['first_name'];
-				if ( ! empty( $form_data['last_name'] ) ) {
-					$name .= ' ' . $form_data['last_name'];
-				}
-			}
+			$name = self::resolve_lead_name( $form_data );
 
 			fputcsv(
 				$fp,
@@ -1877,9 +1930,9 @@ class RTG_Admin {
 					(int) $row->id,
 					(string) $row->email,
 					$name,
-					isset( $form_data['company'] ) ? (string) $form_data['company'] : '',
-					isset( $form_data['user_type'] ) ? (string) $form_data['user_type'] : '',
-					(string) $row->form_data,
+					isset( $form_data['company'] ) && is_scalar( $form_data['company'] ) ? (string) $form_data['company'] : '',
+					isset( $form_data['user_type'] ) && is_scalar( $form_data['user_type'] ) ? (string) $form_data['user_type'] : '',
+					wp_json_encode( $form_payload ),
 					isset( $row->form_names ) ? (string) $row->form_names : '',
 					isset( $row->assets_accessed ) ? (int) $row->assets_accessed : 0,
 					isset( $row->last_activity ) ? (string) $row->last_activity : '',
@@ -1931,7 +1984,9 @@ class RTG_Admin {
 		}
 
 		if ( ! empty( $filters['user_type'] ) ) {
-			$where_sql[] = 'l.form_data LIKE %s';
+			$where_sql[] = '(JSON_UNQUOTE(JSON_EXTRACT(l.form_data, %s)) = %s OR l.form_data LIKE %s)';
+			$params[]    = '$.latest.user_type';
+			$params[]    = $filters['user_type'];
 			$params[]    = '%' . $wpdb->esc_like( $filters['user_type'] ) . '%';
 		}
 
@@ -1956,6 +2011,77 @@ class RTG_Admin {
 			'orderby'   => $orderby,
 			'order'     => $order,
 		);
+	}
+
+
+	/**
+	 * Normalize lead form_data payload for legacy and history-aware schemas.
+	 *
+	 * @param string|null $form_data_json Raw lead form_data JSON.
+	 * @return array
+	 */
+	public static function normalize_form_data_payload( $form_data_json ) {
+		$payload = json_decode( (string) $form_data_json, true );
+		if ( ! is_array( $payload ) ) {
+			$payload = array();
+		}
+
+		if ( isset( $payload['latest'] ) && is_array( $payload['latest'] ) ) {
+			if ( ! isset( $payload['history'] ) || ! is_array( $payload['history'] ) ) {
+				$payload['history'] = array();
+			}
+			return $payload;
+		}
+
+		$legacy_fields = array();
+		foreach ( $payload as $key => $value ) {
+			if ( 'history' !== $key && is_string( $key ) ) {
+				$legacy_fields[ $key ] = $value;
+			}
+		}
+
+		return array_merge(
+			$legacy_fields,
+			array(
+				'latest'  => $legacy_fields,
+				'history' => isset( $payload['history'] ) && is_array( $payload['history'] ) ? $payload['history'] : array(),
+			)
+		);
+	}
+
+	/**
+	 * Get lead latest field payload from normalized form_data.
+	 *
+	 * @param array $payload Normalized form_data payload.
+	 * @return array
+	 */
+	public static function get_latest_form_fields( array $payload ) {
+		if ( isset( $payload['latest'] ) && is_array( $payload['latest'] ) ) {
+			return $payload['latest'];
+		}
+		return array();
+	}
+
+	/**
+	 * Resolve lead display name from latest form fields.
+	 *
+	 * @param array $latest_fields Latest lead form fields.
+	 * @return string
+	 */
+	public static function resolve_lead_name( array $latest_fields ) {
+		$name = '';
+		if ( ! empty( $latest_fields['full_name'] ) && is_scalar( $latest_fields['full_name'] ) ) {
+			$name = (string) $latest_fields['full_name'];
+		} elseif ( ! empty( $latest_fields['first_name'] ) && is_scalar( $latest_fields['first_name'] ) ) {
+			$name = (string) $latest_fields['first_name'];
+			if ( ! empty( $latest_fields['last_name'] ) && is_scalar( $latest_fields['last_name'] ) ) {
+				$name .= ' ' . (string) $latest_fields['last_name'];
+			}
+		} elseif ( ! empty( $latest_fields['name'] ) && is_scalar( $latest_fields['name'] ) ) {
+			$name = (string) $latest_fields['name'];
+		}
+
+		return $name;
 	}
 
 	/**
@@ -2152,10 +2278,8 @@ if ( class_exists( 'WP_List_Table' ) ) {
 		 * @return string
 		 */
 		public function column_default( $item, $column_name ) {
-			$form_data = json_decode( (string) $item->form_data, true );
-			if ( ! is_array( $form_data ) ) {
-				$form_data = array();
-			}
+			$form_payload = RTG_Admin::normalize_form_data_payload( $item->form_data );
+			$form_data    = RTG_Admin::get_latest_form_fields( $form_payload );
 
 			switch ( $column_name ) {
 				case 'email':
@@ -2169,16 +2293,7 @@ if ( class_exists( 'WP_List_Table' ) ) {
 					return '<a href="' . esc_url( $detail_url ) . '"><strong>' . esc_html( $item->email ) . '</strong></a>' . $this->row_actions( $row_actions );
 
 				case 'name':
-					$name = '';
-					if ( ! empty( $form_data['full_name'] ) ) {
-						$name = $form_data['full_name'];
-					} elseif ( ! empty( $form_data['first_name'] ) ) {
-						$name = $form_data['first_name'];
-						if ( ! empty( $form_data['last_name'] ) ) {
-							$name .= ' ' . $form_data['last_name'];
-						}
-					}
-					return esc_html( $name );
+					return esc_html( RTG_Admin::resolve_lead_name( $form_data ) );
 
 				case 'company':
 					$company = isset( $form_data['company'] ) ? $form_data['company'] : '';

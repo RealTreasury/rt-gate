@@ -73,6 +73,12 @@ Notes:
 
 Create/update lead and issue per-asset tokenized redirect URLs.
 
+Upsert semantics for leads:
+- Lead identity key remains `email` (unique).
+- Repeated submits for the same email do **not** overwrite prior submission context destructively.
+- `rtg_leads.form_data` now stores `latest` + per-form historical snapshots (`history[form_id][timestamp]`).
+- Legacy consumers can still read flattened top-level fields in `form_data` for backward compatibility.
+
 ### Request JSON
 
 ```json

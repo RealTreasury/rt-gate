@@ -143,7 +143,12 @@ Features:
   - **Delete** (nonce-protected confirmation link)
 - Lead detail includes an **Edit Lead** form for:
   - `email`
-  - editable `form_data` keys: `name`, `company`, `user_type`
+  - editable latest payload keys: `name`, `company`, `user_type`
+- Lead detail includes summary cards for:
+  - latest form payload
+  - forms submitted (aggregated from `rtg_events` `form_submit`)
+  - assets issued (from `rtg_tokens`) and assets accessed (from `rtg_events`)
+  - historical form payload snapshots grouped by form/timestamp from `form_data.history`
 - Lead detail includes a **Delete Lead** button.
 
 Handler paths:
