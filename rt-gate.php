@@ -19,6 +19,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'RTG_PLUGIN_FILE', __FILE__ );
 define( 'RTG_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'RTG_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+define( 'RTG_PLUGIN_VERSION', '0.1.0' );
+define( 'RTG_SCHEMA_VERSION', RTG_PLUGIN_VERSION );
 
 $rtg_includes = array(
 	'includes/class-db.php',
@@ -41,6 +43,26 @@ foreach ( $rtg_includes as $rtg_include ) {
 }
 
 register_activation_hook( RTG_PLUGIN_FILE, array( 'RTG_DB', 'install' ) );
+register_activation_hook( RTG_PLUGIN_FILE, function () {
+	update_option( 'rtg_schema_version', RTG_SCHEMA_VERSION );
+} );
+
+/**
+ * Run schema installation on normal loads when plugin version changes.
+ *
+ * Keeps existing active installs in sync after plugin updates.
+ */
+function rtg_maybe_install_schema() {
+	$stored_schema_version = get_option( 'rtg_schema_version' );
+
+	if ( is_string( $stored_schema_version ) && version_compare( $stored_schema_version, RTG_SCHEMA_VERSION, '>=' ) ) {
+		return;
+	}
+
+	RTG_DB::install();
+	update_option( 'rtg_schema_version', RTG_SCHEMA_VERSION );
+}
+add_action( 'plugins_loaded', 'rtg_maybe_install_schema' );
 
 /**
  * Schedule daily expired token cleanup on activation.

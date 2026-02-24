@@ -94,6 +94,20 @@ Check:
 - Plugin error logs for `RTG_DB::install()`
 - Required versions from `rt-gate.php` header
 
+## 8) Plugin updated but schema changes did not apply
+
+Behavior:
+
+- On normal plugin loads, `rt-gate.php` compares the stored `rtg_schema_version` option with `RTG_SCHEMA_VERSION`.
+- If missing or lower, it runs `RTG_DB::install()` and updates `rtg_schema_version`.
+- Activation hooks remain in place for first-time installs and also set the stored schema version.
+
+Check:
+
+- Verify `rtg_schema_version` in `wp_options` is current.
+- Reload wp-admin once after deployment so `plugins_loaded` can run upgrade checks.
+- Inspect logs for errors thrown during `RTG_DB::install()`.
+
 ## Escalation checklist
 
 When opening an issue, include:
