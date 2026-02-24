@@ -1187,7 +1187,7 @@ class RTG_Admin {
 			$record = $wpdb->get_row( $wpdb->prepare( "SELECT id, name, fields_schema, consent_text, email_settings FROM {$table} WHERE id = %d", $edit_id ) );
 			if ( $record ) {
 				$revisions_table = $wpdb->prefix . 'rtg_form_revisions';
-				$form_revisions  = $wpdb->get_results( $wpdb->prepare( "SELECT id, edited_by, restored_from_revision_id, created_at FROM {$revisions_table} WHERE form_id = %d ORDER BY id DESC LIMIT 20", $edit_id ) );
+				$form_revisions  = $wpdb->get_results( $wpdb->prepare( "SELECT id, form_id, edited_by, restored_from_revision_id, created_at FROM {$revisions_table} WHERE form_id = %d ORDER BY id DESC LIMIT 20", $edit_id ) );
 			}
 		}
 
@@ -1660,6 +1660,7 @@ class RTG_Admin {
 					<thead>
 						<tr>
 							<th><?php echo esc_html__( 'Revision ID', 'rt-gate' ); ?></th>
+							<th><?php echo esc_html__( 'Form ID', 'rt-gate' ); ?></th>
 							<th><?php echo esc_html__( 'Edited By (User ID)', 'rt-gate' ); ?></th>
 							<th><?php echo esc_html__( 'Restored From', 'rt-gate' ); ?></th>
 							<th><?php echo esc_html__( 'Created', 'rt-gate' ); ?></th>
@@ -1671,6 +1672,7 @@ class RTG_Admin {
 							<?php foreach ( $form_revisions as $revision ) : ?>
 								<tr>
 									<td><?php echo esc_html( $revision->id ); ?></td>
+									<td><?php echo esc_html( $revision->form_id ); ?></td>
 									<td><?php echo esc_html( $revision->edited_by ); ?></td>
 									<td><?php echo esc_html( $revision->restored_from_revision_id > 0 ? $revision->restored_from_revision_id : '—' ); ?></td>
 									<td><?php echo esc_html( $revision->created_at ); ?></td>
@@ -1686,7 +1688,7 @@ class RTG_Admin {
 								</tr>
 							<?php endforeach; ?>
 						<?php else : ?>
-							<tr><td colspan="5"><?php echo esc_html__( 'No revisions yet. A revision is created before each update and restore.', 'rt-gate' ); ?></td></tr>
+							<tr><td colspan="6"><?php echo esc_html__( 'No revisions yet. A revision is created before each update and restore.', 'rt-gate' ); ?></td></tr>
 						<?php endif; ?>
 					</tbody>
 				</table>
@@ -1893,7 +1895,7 @@ class RTG_Admin {
 			$record = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_id, asset_id, iframe_src_template FROM {$mappings_table} WHERE id = %d", $edit_id ) );
 			if ( $record ) {
 				$revisions_table   = $wpdb->prefix . 'rtg_mapping_revisions';
-				$mapping_revisions = $wpdb->get_results( $wpdb->prepare( "SELECT id, edited_by, restored_from_revision_id, created_at FROM {$revisions_table} WHERE mapping_id = %d ORDER BY id DESC LIMIT 20", $edit_id ) );
+				$mapping_revisions = $wpdb->get_results( $wpdb->prepare( "SELECT id, edited_by, restored_from_revision_id, snapshot, created_at FROM {$revisions_table} WHERE mapping_id = %d ORDER BY id DESC LIMIT 20", $edit_id ) );
 			}
 		}
 
@@ -1946,6 +1948,7 @@ class RTG_Admin {
 					<thead>
 						<tr>
 							<th><?php echo esc_html__( 'Revision ID', 'rt-gate' ); ?></th>
+							<th><?php echo esc_html__( 'Form ID (Revision)', 'rt-gate' ); ?></th>
 							<th><?php echo esc_html__( 'Edited By (User ID)', 'rt-gate' ); ?></th>
 							<th><?php echo esc_html__( 'Restored From', 'rt-gate' ); ?></th>
 							<th><?php echo esc_html__( 'Created', 'rt-gate' ); ?></th>
@@ -1955,8 +1958,16 @@ class RTG_Admin {
 					<tbody>
 						<?php if ( ! empty( $mapping_revisions ) ) : ?>
 							<?php foreach ( $mapping_revisions as $revision ) : ?>
+								<?php
+								$revision_snapshot = json_decode( (string) $revision->snapshot, true );
+								$revision_form_id  = 0;
+								if ( is_array( $revision_snapshot ) && isset( $revision_snapshot['form_id'] ) ) {
+									$revision_form_id = absint( $revision_snapshot['form_id'] );
+								}
+								?>
 								<tr>
 									<td><?php echo esc_html( $revision->id ); ?></td>
+									<td><?php echo esc_html( $revision_form_id > 0 ? $revision_form_id : '—' ); ?></td>
 									<td><?php echo esc_html( $revision->edited_by ); ?></td>
 									<td><?php echo esc_html( $revision->restored_from_revision_id > 0 ? $revision->restored_from_revision_id : '—' ); ?></td>
 									<td><?php echo esc_html( $revision->created_at ); ?></td>
@@ -1972,7 +1983,7 @@ class RTG_Admin {
 								</tr>
 							<?php endforeach; ?>
 						<?php else : ?>
-							<tr><td colspan="5"><?php echo esc_html__( 'No revisions yet. A revision is created before each update and restore.', 'rt-gate' ); ?></td></tr>
+							<tr><td colspan="6"><?php echo esc_html__( 'No revisions yet. A revision is created before each update and restore.', 'rt-gate' ); ?></td></tr>
 						<?php endif; ?>
 					</tbody>
 				</table>

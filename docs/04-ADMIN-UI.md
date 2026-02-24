@@ -77,7 +77,7 @@ Server-side validation invariants on save/edit:
 
 Revision history:
 - When editing an existing form, the page shows a **Revision History** table (latest 20 revisions).
-- Each row shows revision ID, editor user ID, optional `restored_from_revision_id`, timestamp, and **Restore** action.
+- Each row shows revision ID, form ID, editor user ID, optional `restored_from_revision_id`, timestamp, and **Restore** action.
 - Every successful form update stores the prior state as a revision before writing changes.
 - Restoring a form also stores the current state as a new revision first (append-only audit trail).
 
@@ -148,7 +148,7 @@ Handler path:
 
 Revision history:
 - When editing an existing mapping, the page shows a **Revision History** table (latest 20 revisions).
-- Each row shows revision ID, editor user ID, optional `restored_from_revision_id`, timestamp, and **Restore** action.
+- Each row shows revision ID, form ID, editor user ID, optional `restored_from_revision_id`, timestamp, and **Restore** action.
 - Every successful mapping update stores the prior state as a revision before writing changes.
 - Restoring a mapping validates the snapshot, then stores current state as a new revision first.
 
