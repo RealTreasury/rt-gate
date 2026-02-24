@@ -2,7 +2,7 @@
 
 All tables are created by `RTG_DB::install()` with prefix: `$wpdb->prefix . 'rtg_'`.
 
-## Tables (6)
+## Tables (8)
 
 ## 1) `rtg_forms`
 Purpose: define lead-capture form metadata.
@@ -149,3 +149,26 @@ Query behavior:
 - `RTG_Events::query_events()` and `RTG_Events::count_events()` enforce `e.is_deleted = 0` by default.
 - Admin UI can include deleted rows only when `include_deleted=1` filter is set.
 - CSV export uses the same filtered query path and therefore excludes deleted rows by default.
+
+
+## 7) `rtg_form_revisions`
+Purpose: append-only snapshots of prior `rtg_forms` states for admin rollback.
+
+Columns:
+- `id` bigint unsigned PK
+- `form_id` bigint unsigned (indexed)
+- `snapshot` longtext (JSON-encoded prior form row)
+- `edited_by` bigint unsigned (admin user ID)
+- `restored_from_revision_id` bigint unsigned (0 unless created by restore)
+- `created_at` datetime (indexed)
+
+## 8) `rtg_mapping_revisions`
+Purpose: append-only snapshots of prior `rtg_mappings` states for admin rollback.
+
+Columns:
+- `id` bigint unsigned PK
+- `mapping_id` bigint unsigned (indexed)
+- `snapshot` longtext (JSON-encoded prior mapping row)
+- `edited_by` bigint unsigned (admin user ID)
+- `restored_from_revision_id` bigint unsigned (0 unless created by restore)
+- `created_at` datetime (indexed)

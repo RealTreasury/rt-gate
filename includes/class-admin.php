@@ -183,6 +183,14 @@ class RTG_Admin {
 				check_admin_referer( 'rtg_save_mapping' );
 				self::save_mapping();
 				break;
+			case 'restore_form_revision':
+				check_admin_referer( 'rtg_restore_form_revision' );
+				self::restore_form_revision();
+				break;
+			case 'restore_mapping_revision':
+				check_admin_referer( 'rtg_restore_mapping_revision' );
+				self::restore_mapping_revision();
+				break;
 			case 'delete_form':
 				check_admin_referer( 'rtg_delete_form' );
 				self::delete_record( 'rtg_forms', 'rtg-forms', 'Form deleted.' );
@@ -256,6 +264,11 @@ class RTG_Admin {
 		);
 
 		if ( $id > 0 ) {
+			$existing = $wpdb->get_row( $wpdb->prepare( "SELECT id, name, fields_schema, consent_text, email_settings FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+			if ( is_array( $existing ) ) {
+				self::insert_form_revision( $id, $existing );
+			}
+
 			$wpdb->update( $table, $data, array( 'id' => $id ), array( '%s', '%s', '%s', '%s' ), array( '%d' ) );
 		} else {
 			$wpdb->insert( $table, $data, array( '%s', '%s', '%s', '%s' ) );
@@ -443,6 +456,11 @@ class RTG_Admin {
 		);
 
 		if ( $id > 0 ) {
+			$existing = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_id, asset_id, iframe_src_template FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+			if ( is_array( $existing ) ) {
+				self::insert_mapping_revision( $id, $existing );
+			}
+
 			$wpdb->update( $table, $data, array( 'id' => $id ), array( '%d', '%d', '%s' ), array( '%d' ) );
 		} else {
 			$wpdb->insert( $table, $data, array( '%d', '%d', '%s' ) );
@@ -451,6 +469,161 @@ class RTG_Admin {
 
 		$redirect_url = admin_url( 'admin.php?page=rtg-mappings&edit_id=' . absint( $id ) . '&rtg_notice=' . rawurlencode( 'Mapping saved.' ) );
 		wp_safe_redirect( $redirect_url );
+		exit;
+	}
+
+
+	/**
+	 * Persist a historical snapshot for a form.
+	 *
+	 * @param int   $form_id   Form ID.
+	 * @param array $snapshot  Form row values before update/restore.
+	 * @param int   $restored_from_revision_id Source revision ID when this snapshot was created during restore.
+	 * @return void
+	 */
+	private static function insert_form_revision( $form_id, $snapshot, $restored_from_revision_id = 0 ) {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'rtg_form_revisions';
+		$wpdb->insert(
+			$table,
+			array(
+				'form_id'                    => $form_id,
+				'snapshot'                   => wp_json_encode( $snapshot ),
+				'edited_by'                  => get_current_user_id(),
+				'restored_from_revision_id'  => absint( $restored_from_revision_id ),
+			),
+			array( '%d', '%s', '%d', '%d' )
+		);
+	}
+
+	/**
+	 * Persist a historical snapshot for a mapping.
+	 *
+	 * @param int   $mapping_id Mapping ID.
+	 * @param array $snapshot   Mapping row values before update/restore.
+	 * @param int   $restored_from_revision_id Source revision ID when this snapshot was created during restore.
+	 * @return void
+	 */
+	private static function insert_mapping_revision( $mapping_id, $snapshot, $restored_from_revision_id = 0 ) {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'rtg_mapping_revisions';
+		$wpdb->insert(
+			$table,
+			array(
+				'mapping_id'                 => $mapping_id,
+				'snapshot'                   => wp_json_encode( $snapshot ),
+				'edited_by'                  => get_current_user_id(),
+				'restored_from_revision_id'  => absint( $restored_from_revision_id ),
+			),
+			array( '%d', '%s', '%d', '%d' )
+		);
+	}
+
+	/**
+	 * Restore a form from a prior revision snapshot.
+	 *
+	 * @return void
+	 */
+	private static function restore_form_revision() {
+		global $wpdb;
+
+		$revision_id = isset( $_POST['revision_id'] ) ? absint( wp_unslash( $_POST['revision_id'] ) ) : 0;
+		$form_id     = isset( $_POST['id'] ) ? absint( wp_unslash( $_POST['id'] ) ) : 0;
+		$revisions_table = $wpdb->prefix . 'rtg_form_revisions';
+		$forms_table     = $wpdb->prefix . 'rtg_forms';
+
+		$revision = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_id, snapshot FROM {$revisions_table} WHERE id = %d", $revision_id ), ARRAY_A );
+		if ( ! is_array( $revision ) || (int) $revision['form_id'] !== $form_id ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=rtg-forms&edit_id=' . $form_id . '&rtg_notice_type=error&rtg_notice=' . rawurlencode( 'Revision not found.' ) ) );
+			exit;
+		}
+
+		$current = $wpdb->get_row( $wpdb->prepare( "SELECT id, name, fields_schema, consent_text, email_settings FROM {$forms_table} WHERE id = %d", $form_id ), ARRAY_A );
+		if ( ! is_array( $current ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=rtg-forms&rtg_notice_type=error&rtg_notice=' . rawurlencode( 'Form not found.' ) ) );
+			exit;
+		}
+
+		$snapshot = json_decode( (string) $revision['snapshot'], true );
+		if ( ! is_array( $snapshot ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=rtg-forms&edit_id=' . $form_id . '&rtg_notice_type=error&rtg_notice=' . rawurlencode( 'Revision snapshot is invalid.' ) ) );
+			exit;
+		}
+
+		self::insert_form_revision( $form_id, $current, $revision_id );
+		$wpdb->update(
+			$forms_table,
+			array(
+				'name'           => isset( $snapshot['name'] ) ? sanitize_text_field( $snapshot['name'] ) : '',
+				'fields_schema'  => isset( $snapshot['fields_schema'] ) ? (string) $snapshot['fields_schema'] : '[]',
+				'consent_text'   => isset( $snapshot['consent_text'] ) ? sanitize_text_field( $snapshot['consent_text'] ) : '',
+				'email_settings' => isset( $snapshot['email_settings'] ) ? (string) $snapshot['email_settings'] : '',
+			),
+			array( 'id' => $form_id ),
+			array( '%s', '%s', '%s', '%s' ),
+			array( '%d' )
+		);
+
+		wp_safe_redirect( admin_url( 'admin.php?page=rtg-forms&edit_id=' . $form_id . '&rtg_notice=' . rawurlencode( 'Form restored from revision.' ) ) );
+		exit;
+	}
+
+	/**
+	 * Restore a mapping from a prior revision snapshot.
+	 *
+	 * @return void
+	 */
+	private static function restore_mapping_revision() {
+		global $wpdb;
+
+		$revision_id = isset( $_POST['revision_id'] ) ? absint( wp_unslash( $_POST['revision_id'] ) ) : 0;
+		$mapping_id  = isset( $_POST['id'] ) ? absint( wp_unslash( $_POST['id'] ) ) : 0;
+		$revisions_table = $wpdb->prefix . 'rtg_mapping_revisions';
+		$mappings_table  = $wpdb->prefix . 'rtg_mappings';
+
+		$revision = $wpdb->get_row( $wpdb->prepare( "SELECT id, mapping_id, snapshot FROM {$revisions_table} WHERE id = %d", $revision_id ), ARRAY_A );
+		if ( ! is_array( $revision ) || (int) $revision['mapping_id'] !== $mapping_id ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=rtg-mappings&edit_id=' . $mapping_id . '&rtg_notice_type=error&rtg_notice=' . rawurlencode( 'Revision not found.' ) ) );
+			exit;
+		}
+
+		$current = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_id, asset_id, iframe_src_template FROM {$mappings_table} WHERE id = %d", $mapping_id ), ARRAY_A );
+		if ( ! is_array( $current ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=rtg-mappings&rtg_notice_type=error&rtg_notice=' . rawurlencode( 'Mapping not found.' ) ) );
+			exit;
+		}
+
+		$snapshot = json_decode( (string) $revision['snapshot'], true );
+		if ( ! is_array( $snapshot ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=rtg-mappings&edit_id=' . $mapping_id . '&rtg_notice_type=error&rtg_notice=' . rawurlencode( 'Revision snapshot is invalid.' ) ) );
+			exit;
+		}
+
+		$form_id             = isset( $snapshot['form_id'] ) ? absint( $snapshot['form_id'] ) : 0;
+		$asset_id            = isset( $snapshot['asset_id'] ) ? absint( $snapshot['asset_id'] ) : 0;
+		$iframe_src_template = isset( $snapshot['iframe_src_template'] ) ? sanitize_text_field( $snapshot['iframe_src_template'] ) : '';
+		$validation          = self::validate_mapping_data( $form_id, $asset_id, $iframe_src_template, $mapping_id );
+		if ( ! $validation['valid'] ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=rtg-mappings&edit_id=' . $mapping_id . '&rtg_notice_type=error&rtg_notice=' . rawurlencode( $validation['message'] ) ) );
+			exit;
+		}
+
+		self::insert_mapping_revision( $mapping_id, $current, $revision_id );
+		$wpdb->update(
+			$mappings_table,
+			array(
+				'form_id'             => $form_id,
+				'asset_id'            => $asset_id,
+				'iframe_src_template' => $iframe_src_template,
+			),
+			array( 'id' => $mapping_id ),
+			array( '%d', '%d', '%s' ),
+			array( '%d' )
+		);
+
+		wp_safe_redirect( admin_url( 'admin.php?page=rtg-mappings&edit_id=' . $mapping_id . '&rtg_notice=' . rawurlencode( 'Mapping restored from revision.' ) ) );
 		exit;
 	}
 
@@ -934,11 +1107,17 @@ class RTG_Admin {
 		$record    = null;
 		$asset_url = '';
 
+		$form_revisions = array();
 		if ( $edit_id > 0 ) {
 			$record = $wpdb->get_row( $wpdb->prepare( "SELECT id, name, fields_schema, consent_text, email_settings FROM {$table} WHERE id = %d", $edit_id ) );
+			if ( $record ) {
+				$revisions_table = $wpdb->prefix . 'rtg_form_revisions';
+				$form_revisions  = $wpdb->get_results( $wpdb->prepare( "SELECT id, edited_by, restored_from_revision_id, created_at FROM {$revisions_table} WHERE form_id = %d ORDER BY id DESC LIMIT 20", $edit_id ) );
+			}
 		}
 
 		$nonce = wp_create_nonce( 'rtg_save_form' );
+		$restore_nonce = wp_create_nonce( 'rtg_restore_form_revision' );
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'Forms', 'rt-gate' ); ?></h1>
@@ -1393,6 +1572,44 @@ class RTG_Admin {
 				})();
 			</script>
 
+			<?php if ( $record ) : ?>
+				<h2><?php echo esc_html__( 'Revision History', 'rt-gate' ); ?></h2>
+				<table class="widefat striped">
+					<thead>
+						<tr>
+							<th><?php echo esc_html__( 'Revision ID', 'rt-gate' ); ?></th>
+							<th><?php echo esc_html__( 'Edited By (User ID)', 'rt-gate' ); ?></th>
+							<th><?php echo esc_html__( 'Restored From', 'rt-gate' ); ?></th>
+							<th><?php echo esc_html__( 'Created', 'rt-gate' ); ?></th>
+							<th><?php echo esc_html__( 'Actions', 'rt-gate' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php if ( ! empty( $form_revisions ) ) : ?>
+							<?php foreach ( $form_revisions as $revision ) : ?>
+								<tr>
+									<td><?php echo esc_html( $revision->id ); ?></td>
+									<td><?php echo esc_html( $revision->edited_by ); ?></td>
+									<td><?php echo esc_html( $revision->restored_from_revision_id > 0 ? $revision->restored_from_revision_id : '—' ); ?></td>
+									<td><?php echo esc_html( $revision->created_at ); ?></td>
+									<td>
+										<form method="post" style="display:inline;" onsubmit="return confirm('<?php echo esc_js( __( 'Restore this form revision?', 'rt-gate' ) ); ?>');">
+											<input type="hidden" name="rtg_action" value="restore_form_revision" />
+											<input type="hidden" name="_wpnonce" value="<?php echo esc_attr( $restore_nonce ); ?>" />
+											<input type="hidden" name="id" value="<?php echo esc_attr( $record->id ); ?>" />
+											<input type="hidden" name="revision_id" value="<?php echo esc_attr( $revision->id ); ?>" />
+											<button type="submit" class="button-link"><?php echo esc_html__( 'Restore', 'rt-gate' ); ?></button>
+										</form>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						<?php else : ?>
+							<tr><td colspan="5"><?php echo esc_html__( 'No revisions yet. A revision is created before each update and restore.', 'rt-gate' ); ?></td></tr>
+						<?php endif; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+
 			<h2><?php echo esc_html__( 'Existing Forms', 'rt-gate' ); ?></h2>
 			<table class="widefat striped">
 				<thead>
@@ -1588,12 +1805,18 @@ class RTG_Admin {
 		$assets   = $wpdb->get_results( "SELECT id, name FROM {$assets_table} ORDER BY name ASC" );
 		$edit_id  = isset( $_GET['edit_id'] ) ? absint( wp_unslash( $_GET['edit_id'] ) ) : 0;
 		$record   = null;
+		$mapping_revisions = array();
 
 		if ( $edit_id > 0 ) {
 			$record = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_id, asset_id, iframe_src_template FROM {$mappings_table} WHERE id = %d", $edit_id ) );
+			if ( $record ) {
+				$revisions_table   = $wpdb->prefix . 'rtg_mapping_revisions';
+				$mapping_revisions = $wpdb->get_results( $wpdb->prepare( "SELECT id, edited_by, restored_from_revision_id, created_at FROM {$revisions_table} WHERE mapping_id = %d ORDER BY id DESC LIMIT 20", $edit_id ) );
+			}
 		}
 
 		$nonce = wp_create_nonce( 'rtg_save_mapping' );
+		$restore_nonce = wp_create_nonce( 'rtg_restore_mapping_revision' );
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'Mappings', 'rt-gate' ); ?></h1>
@@ -1634,6 +1857,44 @@ class RTG_Admin {
 				</table>
 				<?php submit_button( $record ? esc_html__( 'Update Mapping', 'rt-gate' ) : esc_html__( 'Create Mapping', 'rt-gate' ) ); ?>
 			</form>
+
+			<?php if ( $record ) : ?>
+				<h2><?php echo esc_html__( 'Revision History', 'rt-gate' ); ?></h2>
+				<table class="widefat striped">
+					<thead>
+						<tr>
+							<th><?php echo esc_html__( 'Revision ID', 'rt-gate' ); ?></th>
+							<th><?php echo esc_html__( 'Edited By (User ID)', 'rt-gate' ); ?></th>
+							<th><?php echo esc_html__( 'Restored From', 'rt-gate' ); ?></th>
+							<th><?php echo esc_html__( 'Created', 'rt-gate' ); ?></th>
+							<th><?php echo esc_html__( 'Actions', 'rt-gate' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php if ( ! empty( $mapping_revisions ) ) : ?>
+							<?php foreach ( $mapping_revisions as $revision ) : ?>
+								<tr>
+									<td><?php echo esc_html( $revision->id ); ?></td>
+									<td><?php echo esc_html( $revision->edited_by ); ?></td>
+									<td><?php echo esc_html( $revision->restored_from_revision_id > 0 ? $revision->restored_from_revision_id : '—' ); ?></td>
+									<td><?php echo esc_html( $revision->created_at ); ?></td>
+									<td>
+										<form method="post" style="display:inline;" onsubmit="return confirm('<?php echo esc_js( __( 'Restore this mapping revision?', 'rt-gate' ) ); ?>');">
+											<input type="hidden" name="rtg_action" value="restore_mapping_revision" />
+											<input type="hidden" name="_wpnonce" value="<?php echo esc_attr( $restore_nonce ); ?>" />
+											<input type="hidden" name="id" value="<?php echo esc_attr( $record->id ); ?>" />
+											<input type="hidden" name="revision_id" value="<?php echo esc_attr( $revision->id ); ?>" />
+											<button type="submit" class="button-link"><?php echo esc_html__( 'Restore', 'rt-gate' ); ?></button>
+										</form>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						<?php else : ?>
+							<tr><td colspan="5"><?php echo esc_html__( 'No revisions yet. A revision is created before each update and restore.', 'rt-gate' ); ?></td></tr>
+						<?php endif; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
 
 			<h2><?php echo esc_html__( 'Existing Mappings', 'rt-gate' ); ?></h2>
 			<table class="widefat striped">
