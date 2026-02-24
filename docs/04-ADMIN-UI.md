@@ -67,6 +67,13 @@ Handler path:
 - Nonce action: `rtg_save_form`
 - Save method: `RTG_Admin::save_form()`
 
+Server-side validation invariants on save/edit:
+- `fields_schema` must decode to a JSON array of field objects.
+- Every field object must include a non-empty `key`.
+- Field keys must be unique within the schema.
+- At least one field key must be exactly `email`.
+- Validation failures redirect back to the same form edit screen with `rtg_notice_type=error` and a specific `rtg_notice` message.
+
 ## Assets screen (`rtg-assets`)
 
 Renderer:

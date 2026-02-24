@@ -220,9 +220,19 @@ class RTG_Admin {
 			$privacy_policy_url
 		);
 
-		$raw_schema    = isset( $_POST['fields_schema'] ) ? wp_unslash( $_POST['fields_schema'] ) : '';
+		$raw_schema     = isset( $_POST['fields_schema'] ) ? wp_unslash( $_POST['fields_schema'] ) : '';
 		$decoded_schema = json_decode( $raw_schema, true );
-		$safe_schema    = is_array( $decoded_schema ) ? wp_json_encode( $decoded_schema ) : '[]';
+		$validation     = self::validate_fields_schema( $decoded_schema );
+
+		if ( ! $validation['valid'] ) {
+			$redirect_url = admin_url(
+				'admin.php?page=rtg-forms&edit_id=' . absint( $id ) . '&rtg_notice_type=error&rtg_notice=' . rawurlencode( $validation['message'] )
+			);
+			wp_safe_redirect( $redirect_url );
+			exit;
+		}
+
+		$safe_schema = wp_json_encode( $decoded_schema );
 
 		$allowed_modes   = array( 'none', 'confirmation_only', 'confirmation_and_links' );
 		$lead_email_mode = isset( $_POST['lead_email_mode'] ) ? sanitize_key( wp_unslash( $_POST['lead_email_mode'] ) ) : 'none';
@@ -255,6 +265,66 @@ class RTG_Admin {
 		$redirect_url = admin_url( 'admin.php?page=rtg-forms&edit_id=' . absint( $id ) . '&rtg_notice=' . rawurlencode( 'Form saved.' ) );
 		wp_safe_redirect( $redirect_url );
 		exit;
+	}
+
+	/**
+	 * Validate decoded form fields schema prior to form persistence.
+	 *
+	 * @param mixed $decoded_schema Decoded JSON schema payload.
+	 * @return array{valid: bool, message: string}
+	 */
+	private static function validate_fields_schema( $decoded_schema ) {
+		if ( ! is_array( $decoded_schema ) ) {
+			return array(
+				'valid'   => false,
+				'message' => __( 'Fields schema must be a JSON array of field objects.', 'rt-gate' ),
+			);
+		}
+
+		$keys      = array();
+		$has_email = false;
+
+		foreach ( $decoded_schema as $field ) {
+			if ( ! is_array( $field ) ) {
+				return array(
+					'valid'   => false,
+					'message' => __( 'Fields schema must be a JSON array of field objects.', 'rt-gate' ),
+				);
+			}
+
+			$key = isset( $field['key'] ) ? trim( (string) $field['key'] ) : '';
+			if ( '' === $key ) {
+				return array(
+					'valid'   => false,
+					'message' => __( 'Each field must include a non-empty key.', 'rt-gate' ),
+				);
+			}
+
+			if ( in_array( $key, $keys, true ) ) {
+				return array(
+					'valid'   => false,
+					'message' => __( 'Field keys must be unique.', 'rt-gate' ),
+				);
+			}
+
+			$keys[] = $key;
+
+			if ( 'email' === $key ) {
+				$has_email = true;
+			}
+		}
+
+		if ( ! $has_email ) {
+			return array(
+				'valid'   => false,
+				'message' => __( 'Fields schema must include an email field key.', 'rt-gate' ),
+			);
+		}
+
+		return array(
+			'valid'   => true,
+			'message' => '',
+		);
 	}
 
 	/**
