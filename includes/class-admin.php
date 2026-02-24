@@ -1644,6 +1644,17 @@ class RTG_Admin {
 			$lead_id
 		) );
 
+		$events_query_args = array(
+			'page' => 'rtg-events',
+			's'    => $lead->email,
+		);
+
+		if ( ! empty( $submitted_forms ) ) {
+			$events_query_args['form_id'] = absint( $submitted_forms[0]->form_id );
+		}
+
+		$related_events_url = add_query_arg( $events_query_args, admin_url( 'admin.php' ) );
+
 		$issued_assets = $wpdb->get_results( $wpdb->prepare(
 			"SELECT a.id AS asset_id, a.name, a.slug, a.type,
 				COUNT(DISTINCT t.id) AS token_count,
@@ -1663,6 +1674,9 @@ class RTG_Admin {
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rtg-leads' ) ); ?>">&larr; <?php echo esc_html__( 'Back to Leads', 'rt-gate' ); ?></a>
 			</p>
 			<h1><?php echo esc_html( $lead->email ); ?></h1>
+			<p>
+				<a class="button button-secondary" href="<?php echo esc_url( $related_events_url ); ?>"><?php echo esc_html__( 'View Related Events', 'rt-gate' ); ?></a>
+			</p>
 
 			<div class="rtg-card" style="margin-bottom: 20px;">
 				<h3><?php echo esc_html__( 'Edit Lead', 'rt-gate' ); ?></h3>
@@ -2289,8 +2303,16 @@ if ( class_exists( 'WP_List_Table' ) ) {
 					$detail_url    = admin_url( 'admin.php?page=rtg-leads&lead_id=' . $lead_id );
 					$form_data_url = $detail_url . '#rtg-latest-form-data';
 					$delete_url    = wp_nonce_url( admin_url( 'admin.php?page=rtg-leads&lead_id=' . $lead_id . '&rtg_action=delete_lead' ), 'rtg_delete_lead' );
-					$row_actions   = array(
+					$related_events_url = add_query_arg(
+						array(
+							'page' => 'rtg-events',
+							's'    => $item->email,
+						),
+						admin_url( 'admin.php' )
+					);
+					$row_actions        = array(
 						'view_form_data' => '<a href="' . esc_url( $form_data_url ) . '">' . esc_html__( 'View Form Data', 'rt-gate' ) . '</a>',
+						'related_events' => '<a href="' . esc_url( $related_events_url ) . '">' . esc_html__( 'Related Events', 'rt-gate' ) . '</a>',
 						'edit'           => '<a href="' . esc_url( $detail_url ) . '">' . esc_html__( 'Edit', 'rt-gate' ) . '</a>',
 						'delete'         => '<a href="' . esc_url( $delete_url ) . '" class="submitdelete" onclick="return confirm(\'' . esc_js( __( 'Delete this lead and all related tokens/events?', 'rt-gate' ) ) . '\');">' . esc_html__( 'Delete', 'rt-gate' ) . '</a>',
 					);

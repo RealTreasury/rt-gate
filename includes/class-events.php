@@ -513,7 +513,7 @@ if ( class_exists( 'WP_List_Table' ) ) {
 		public function column_email( $item ) {
 			$event_id = absint( $item->id );
 			$lead_id  = isset( $item->lead_id ) ? absint( $item->lead_id ) : 0;
-			$email    = esc_html( (string) $item->email );
+			$email    = ! empty( $item->email ) ? esc_html( (string) $item->email ) : '&mdash;';
 
 			$delete_url = wp_nonce_url(
 				admin_url( 'admin.php?page=rtg-events&event_id=' . $event_id . '&rtg_action=delete_event' ),
