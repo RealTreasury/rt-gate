@@ -264,7 +264,7 @@ class RTG_Events {
 		$forms_table  = $wpdb->prefix . 'rtg_forms';
 		$assets_table = $wpdb->prefix . 'rtg_assets';
 
-		$sql = "SELECT e.id, e.form_id, e.asset_id, e.event_type, e.meta, e.created_at,
+		$sql = "SELECT e.id, e.lead_id, e.form_id, e.asset_id, e.event_type, e.meta, e.created_at,
 				COALESCE(l.email, '') AS email,
 				COALESCE(f.name, '') AS form_name,
 				COALESCE(a.name, '') AS asset_name
@@ -512,6 +512,7 @@ if ( class_exists( 'WP_List_Table' ) ) {
 		 */
 		public function column_email( $item ) {
 			$event_id = absint( $item->id );
+			$lead_id  = isset( $item->lead_id ) ? absint( $item->lead_id ) : 0;
 			$email    = esc_html( (string) $item->email );
 
 			$delete_url = wp_nonce_url(
@@ -519,9 +520,19 @@ if ( class_exists( 'WP_List_Table' ) ) {
 				'rtg_delete_event_' . $event_id
 			);
 
-			$actions = array(
-				'delete' => '<a href="' . esc_url( $delete_url ) . '" class="submitdelete" onclick="return confirm(\'' . esc_js( __( 'Soft-delete this event from default views?', 'rt-gate' ) ) . '\');">' . esc_html__( 'Delete', 'rt-gate' ) . '</a>',
-			);
+			$actions = array();
+
+			if ( $lead_id > 0 ) {
+				$lead_url          = admin_url( 'admin.php?page=rtg-leads&lead_id=' . $lead_id );
+				$form_data_lead_url = $lead_url . '#rtg-latest-form-data';
+
+				$actions['view_lead']      = '<a href="' . esc_url( $lead_url ) . '">' . esc_html__( 'View Lead', 'rt-gate' ) . '</a>';
+				$actions['view_form_data'] = '<a href="' . esc_url( $form_data_lead_url ) . '">' . esc_html__( 'View Form Data', 'rt-gate' ) . '</a>';
+			} else {
+				$actions['no_lead_linked'] = '<span aria-disabled="true">' . esc_html__( 'No lead linked', 'rt-gate' ) . '</span>';
+			}
+
+			$actions['delete'] = '<a href="' . esc_url( $delete_url ) . '" class="submitdelete" onclick="return confirm(\'' . esc_js( __( 'Soft-delete this event from default views?', 'rt-gate' ) ) . '\');">' . esc_html__( 'Delete', 'rt-gate' ) . '</a>';
 
 			return $email . $this->row_actions( $actions );
 		}
