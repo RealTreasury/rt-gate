@@ -48,6 +48,7 @@ class RTG_DB {
 	iframe_src_template longtext NOT NULL,
 	created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY  (id),
+	UNIQUE KEY form_asset (form_id,asset_id),
 	KEY form_id (form_id),
 	KEY asset_id (asset_id)
 ) {$charset_collate};";

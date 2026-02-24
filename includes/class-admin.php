@@ -427,7 +427,7 @@ class RTG_Admin {
 		$asset_id = isset( $_POST['asset_id'] ) ? absint( wp_unslash( $_POST['asset_id'] ) ) : 0;
 		$iframe_src_template = isset( $_POST['iframe_src_template'] ) ? sanitize_text_field( wp_unslash( $_POST['iframe_src_template'] ) ) : '';
 
-		$validation = self::validate_mapping_data( $form_id, $asset_id, $iframe_src_template );
+		$validation = self::validate_mapping_data( $form_id, $asset_id, $iframe_src_template, $id );
 		if ( ! $validation['valid'] ) {
 			$redirect_url = admin_url(
 				'admin.php?page=rtg-mappings&edit_id=' . absint( $id ) . '&rtg_notice_type=error&rtg_notice=' . rawurlencode( $validation['message'] )
@@ -460,9 +460,10 @@ class RTG_Admin {
 	 * @param int    $form_id             Submitted form ID.
 	 * @param int    $asset_id            Submitted asset ID.
 	 * @param string $iframe_src_template Submitted iframe URL template.
+	 * @param int    $mapping_id          Mapping ID during edit; 0 for create.
 	 * @return array{valid: bool, message: string}
 	 */
-	private static function validate_mapping_data( $form_id, $asset_id, $iframe_src_template ) {
+	private static function validate_mapping_data( $form_id, $asset_id, $iframe_src_template, $mapping_id = 0 ) {
 		global $wpdb;
 
 		$forms_table  = $wpdb->prefix . 'rtg_forms';
@@ -481,6 +482,24 @@ class RTG_Admin {
 			return array(
 				'valid'   => false,
 				'message' => __( 'Please select a valid asset.', 'rt-gate' ),
+			);
+		}
+
+
+		$mappings_table = $wpdb->prefix . 'rtg_mappings';
+		$duplicate_id   = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT id FROM {$mappings_table} WHERE form_id = %d AND asset_id = %d AND id != %d LIMIT 1",
+				$form_id,
+				$asset_id,
+				$mapping_id
+			)
+		);
+
+		if ( $duplicate_id > 0 ) {
+			return array(
+				'valid'   => false,
+				'message' => __( 'A mapping already exists for the selected form and asset.', 'rt-gate' ),
 			);
 		}
 

@@ -123,6 +123,7 @@ Editable fields:
 Mapping validation invariants on save/edit:
 - `form_id` must reference an existing row in `rtg_forms`.
 - `asset_id` must reference an existing row in `rtg_assets`.
+- The (`form_id`, `asset_id`) pair must be unique; duplicate pairs are rejected with an admin error notice during create/edit.
 - `iframe_src_template` may be blank.
 - When `iframe_src_template` is provided, it must contain at least one placeholder: `{asset_slug}` or `{token}`.
 - Validation failures redirect back to the mapping edit screen (`admin.php?page=rtg-mappings&edit_id={id}`) with `rtg_notice_type=error` and a specific `rtg_notice` message.
