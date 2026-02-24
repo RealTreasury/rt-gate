@@ -249,9 +249,11 @@ class RTG_Admin {
 			$wpdb->update( $table, $data, array( 'id' => $id ), array( '%s', '%s', '%s', '%s' ), array( '%d' ) );
 		} else {
 			$wpdb->insert( $table, $data, array( '%s', '%s', '%s', '%s' ) );
+			$id = $wpdb->insert_id;
 		}
 
-		wp_safe_redirect( admin_url( 'admin.php?page=rtg-forms&rtg_notice=' . rawurlencode( 'Form saved.' ) ) );
+		$redirect_url = admin_url( 'admin.php?page=rtg-forms&edit_id=' . absint( $id ) . '&rtg_notice=' . rawurlencode( 'Form saved.' ) );
+		wp_safe_redirect( $redirect_url );
 		exit;
 	}
 
@@ -300,9 +302,11 @@ class RTG_Admin {
 			$wpdb->update( $table, $data, array( 'id' => $id ), array( '%s', '%s', '%s', '%s' ), array( '%d' ) );
 		} else {
 			$wpdb->insert( $table, $data, array( '%s', '%s', '%s', '%s' ) );
+			$id = $wpdb->insert_id;
 		}
 
-		wp_safe_redirect( admin_url( 'admin.php?page=rtg-assets&rtg_notice=' . rawurlencode( 'Asset saved.' ) ) );
+		$redirect_url = admin_url( 'admin.php?page=rtg-assets&edit_id=' . absint( $id ) . '&rtg_notice=' . rawurlencode( 'Asset saved.' ) );
+		wp_safe_redirect( $redirect_url );
 		exit;
 	}
 
@@ -360,9 +364,11 @@ class RTG_Admin {
 			$wpdb->update( $table, $data, array( 'id' => $id ), array( '%d', '%d', '%s' ), array( '%d' ) );
 		} else {
 			$wpdb->insert( $table, $data, array( '%d', '%d', '%s' ) );
+			$id = $wpdb->insert_id;
 		}
 
-		wp_safe_redirect( admin_url( 'admin.php?page=rtg-mappings&rtg_notice=' . rawurlencode( 'Mapping saved.' ) ) );
+		$redirect_url = admin_url( 'admin.php?page=rtg-mappings&edit_id=' . absint( $id ) . '&rtg_notice=' . rawurlencode( 'Mapping saved.' ) );
+		wp_safe_redirect( $redirect_url );
 		exit;
 	}
 
