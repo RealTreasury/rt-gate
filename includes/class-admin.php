@@ -1564,6 +1564,7 @@ class RTG_Admin {
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'Leads', 'rt-gate' ); ?></h1>
 			<?php self::render_notice(); ?>
+			<p><?php echo esc_html__( 'Use “View Form Data” under any email to jump directly to that lead\'s latest submitted form payload.', 'rt-gate' ); ?></p>
 			<p>
 				<a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=rtg-leads&rtg_action=export_leads_csv' ), 'rtg_export_leads_csv' ) ); ?>">
 					<?php echo esc_html__( 'Export CSV', 'rt-gate' ); ?>
@@ -1698,8 +1699,9 @@ class RTG_Admin {
 			</div>
 
 			<div class="rtg-lead-detail-grid">
-				<div class="rtg-card">
+				<div class="rtg-card" id="rtg-latest-form-data">
 					<h3><?php echo esc_html__( 'Latest Form Data', 'rt-gate' ); ?></h3>
+					<p><?php echo esc_html__( 'This section shows the latest submitted payload for this lead.', 'rt-gate' ); ?></p>
 					<table class="widefat striped">
 						<tbody>
 							<?php if ( ! empty( $form_data ) ) : ?>
@@ -2130,7 +2132,7 @@ if ( class_exists( 'WP_List_Table' ) ) {
 		 */
 		public function get_columns() {
 			return array(
-				'email'           => esc_html__( 'Email', 'rt-gate' ),
+				'email'           => esc_html__( 'Email (open details)', 'rt-gate' ),
 				'name'            => esc_html__( 'Name', 'rt-gate' ),
 				'company'         => esc_html__( 'Company', 'rt-gate' ),
 				'user_type'       => esc_html__( 'User Type', 'rt-gate' ),
@@ -2283,14 +2285,17 @@ if ( class_exists( 'WP_List_Table' ) ) {
 
 			switch ( $column_name ) {
 				case 'email':
-					$lead_id     = absint( $item->id );
-					$detail_url  = admin_url( 'admin.php?page=rtg-leads&lead_id=' . $lead_id );
-					$delete_url  = wp_nonce_url( admin_url( 'admin.php?page=rtg-leads&lead_id=' . $lead_id . '&rtg_action=delete_lead' ), 'rtg_delete_lead' );
-					$row_actions = array(
-						'edit'   => '<a href="' . esc_url( $detail_url ) . '">' . esc_html__( 'Edit', 'rt-gate' ) . '</a>',
-						'delete' => '<a href="' . esc_url( $delete_url ) . '" class="submitdelete" onclick="return confirm(\'' . esc_js( __( 'Delete this lead and all related tokens/events?', 'rt-gate' ) ) . '\');">' . esc_html__( 'Delete', 'rt-gate' ) . '</a>',
+					$lead_id       = absint( $item->id );
+					$detail_url    = admin_url( 'admin.php?page=rtg-leads&lead_id=' . $lead_id );
+					$form_data_url = $detail_url . '#rtg-latest-form-data';
+					$delete_url    = wp_nonce_url( admin_url( 'admin.php?page=rtg-leads&lead_id=' . $lead_id . '&rtg_action=delete_lead' ), 'rtg_delete_lead' );
+					$row_actions   = array(
+						'view_form_data' => '<a href="' . esc_url( $form_data_url ) . '">' . esc_html__( 'View Form Data', 'rt-gate' ) . '</a>',
+						'edit'           => '<a href="' . esc_url( $detail_url ) . '">' . esc_html__( 'Edit', 'rt-gate' ) . '</a>',
+						'delete'         => '<a href="' . esc_url( $delete_url ) . '" class="submitdelete" onclick="return confirm(\'' . esc_js( __( 'Delete this lead and all related tokens/events?', 'rt-gate' ) ) . '\');">' . esc_html__( 'Delete', 'rt-gate' ) . '</a>',
 					);
-					return '<a href="' . esc_url( $detail_url ) . '"><strong>' . esc_html( $item->email ) . '</strong></a>' . $this->row_actions( $row_actions );
+
+					return '<a href="' . esc_url( $form_data_url ) . '"><strong>' . esc_html( $item->email ) . '</strong></a>' . $this->row_actions( $row_actions );
 
 				case 'name':
 					return esc_html( RTG_Admin::resolve_lead_name( $form_data ) );
