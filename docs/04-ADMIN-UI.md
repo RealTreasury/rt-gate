@@ -139,8 +139,11 @@ Renderer:
 Features:
 - List leads with search/filter support and CSV export.
 - Row actions in the leads table provide:
+  - **View Form Data** (opens lead detail anchored to latest payload card)
+  - **Related Events** (opens Events with `s={lead_email}` prefilled)
   - **Edit** (opens lead detail editor)
   - **Delete** (nonce-protected confirmation link)
+- Lead detail header includes a **View Related Events** button that opens `admin.php?page=rtg-events&s={lead_email}` and adds `form_id` when the lead has a latest submitted form.
 - Lead detail includes an **Edit Lead** form for:
   - `email`
   - editable latest payload keys: `name`, `company`, `user_type`
@@ -221,6 +224,7 @@ Filter controls (from `extra_tablenav`):
 Search:
 - Uses default list-table search key `s`
 - `RTG_Events::query_events()` applies email `LIKE` filter against joined `rtg_leads.email`
+- This powers lead-to-events drill-in links (`admin.php?page=rtg-events&s={email}`), with optional `form_id` to narrow context.
 
 ## CSV export flow
 
