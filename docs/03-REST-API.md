@@ -66,6 +66,7 @@ Fetch the public form schema so external pages can dynamically render the correc
 Notes:
 - No authentication required; this is a public read-only endpoint.
 - The `fields[].key` values are the exact keys your form submission must use in the `fields` object sent to `POST /submit`.
+- Admin form save/edit enforces that the form schema always contains a unique `email` field key, so API clients can rely on an `email` field being present in form definitions.
 
 ---
 
