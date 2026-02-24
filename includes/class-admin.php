@@ -230,6 +230,7 @@ class RTG_Admin {
 
 		$raw_schema     = isset( $_POST['fields_schema'] ) ? wp_unslash( $_POST['fields_schema'] ) : '';
 		$decoded_schema = json_decode( $raw_schema, true );
+		$decoded_schema = self::normalize_fields_schema( $decoded_schema );
 		$validation     = self::validate_fields_schema( $decoded_schema );
 
 		if ( ! $validation['valid'] ) {
@@ -338,6 +339,66 @@ class RTG_Admin {
 			'valid'   => true,
 			'message' => '',
 		);
+	}
+
+	/**
+	 * Normalize schema payload from older admin builders into the current format.
+	 *
+	 * @param mixed $decoded_schema Decoded JSON schema payload.
+	 * @return mixed
+	 */
+	private static function normalize_fields_schema( $decoded_schema ) {
+		if ( ! is_array( $decoded_schema ) ) {
+			return $decoded_schema;
+		}
+
+		$normalized = array();
+		foreach ( $decoded_schema as $field ) {
+			if ( ! is_array( $field ) ) {
+				$normalized[] = $field;
+				continue;
+			}
+
+			$key = isset( $field['key'] ) ? trim( (string) $field['key'] ) : '';
+			if ( '' === $key && isset( $field['name'] ) ) {
+				$key = trim( (string) $field['name'] );
+			}
+
+			$label = isset( $field['label'] ) ? trim( (string) $field['label'] ) : '';
+			if ( '' === $label && isset( $field['title'] ) ) {
+				$label = trim( (string) $field['title'] );
+			}
+
+			$type = isset( $field['type'] ) ? trim( (string) $field['type'] ) : '';
+			if ( '' === $type && isset( $field['field_type'] ) ) {
+				$type = trim( (string) $field['field_type'] );
+			}
+
+			$required = null;
+			if ( isset( $field['required'] ) ) {
+				$required = filter_var( $field['required'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+			}
+			if ( null === $required && isset( $field['is_required'] ) ) {
+				$required = filter_var( $field['is_required'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+			}
+
+			if ( '' !== $key ) {
+				$field['key'] = $key;
+			}
+			if ( '' !== $label ) {
+				$field['label'] = $label;
+			}
+			if ( '' !== $type ) {
+				$field['type'] = $type;
+			}
+			if ( null !== $required ) {
+				$field['required'] = $required;
+			}
+
+			$normalized[] = $field;
+		}
+
+		return $normalized;
 	}
 
 	/**
@@ -1348,13 +1409,20 @@ class RTG_Admin {
 
 					function createFieldRow(field) {
 						var defaults = field || {};
-						var selectedType = defaults.type || 'text';
+						var normalizedLabel = defaults.label || defaults.title || '';
+						var normalizedKey = defaults.key || defaults.name || '';
+						var normalizedType = defaults.type || defaults.field_type || 'text';
+						var normalizedRequired = defaults.required;
+						if (typeof normalizedRequired === 'undefined') {
+							normalizedRequired = defaults.is_required;
+						}
+						var selectedType = normalizedType;
 						var extraValue = (defaults.placeholder || (defaults.options ? defaults.options.join(', ') : '')) || '';
 						var autocompleteEnabled = defaults.autocomplete !== false;
 						var row = document.createElement('tr');
 						row.innerHTML =
-							'<td><input type="text" class="rtg-f-label" value="' + (defaults.label || '') + '" placeholder="Full Name" /></td>' +
-							'<td><input type="text" class="rtg-f-key" value="' + (defaults.key || '') + '" placeholder="full_name" /></td>' +
+							'<td><input type="text" class="rtg-f-label" value="' + (normalizedLabel || '') + '" placeholder="Full Name" /></td>' +
+							'<td><input type="text" class="rtg-f-key" value="' + (normalizedKey || '') + '" placeholder="full_name" /></td>' +
 							'<td>' +
 								'<select class="rtg-f-type">' + fieldTypes.map(function (type) {
 									var selected = selectedType === type ? ' selected' : '';
@@ -1362,7 +1430,7 @@ class RTG_Admin {
 								}).join('') +
 								'</select>' +
 							'</td>' +
-							'<td><label><input type="checkbox" class="rtg-f-required"' + (defaults.required ? ' checked' : '') + ' /> <?php echo esc_js( __( 'Yes', 'rt-gate' ) ); ?></label></td>' +
+							'<td><label><input type="checkbox" class="rtg-f-required"' + (normalizedRequired ? ' checked' : '') + ' /> <?php echo esc_js( __( 'Yes', 'rt-gate' ) ); ?></label></td>' +
 							'<td><label><input type="checkbox" class="rtg-f-autocomplete"' + (autocompleteEnabled ? ' checked' : '') + ' /> <?php echo esc_js( __( 'Allow', 'rt-gate' ) ); ?></label></td>' +
 							'<td><input type="text" class="rtg-f-extra" value="' + extraValue + '" placeholder="Enter placeholder or options" /><small class="rtg-f-extra-help">' + (fieldTypeHelp[selectedType] || '') + '</small></td>' +
 							'<td><button type="button" class="button-link rtg-move-up">↑</button> <button type="button" class="button-link rtg-move-down">↓</button></td>' +

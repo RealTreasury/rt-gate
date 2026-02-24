@@ -26,6 +26,9 @@ require_once __DIR__ . '/../includes/class-admin.php';
 $method = new ReflectionMethod( 'RTG_Admin', 'validate_fields_schema' );
 $method->setAccessible( true );
 
+$normalize_method = new ReflectionMethod( 'RTG_Admin', 'normalize_fields_schema' );
+$normalize_method->setAccessible( true );
+
 $assert = static function ( $condition, $message ) {
 	if ( ! $condition ) {
 		fwrite( STDERR, "Assertion failed: {$message}\n" );
@@ -76,5 +79,27 @@ $valid_schema = array(
 $result_valid_schema = $method->invoke( null, $valid_schema );
 $assert( true === $result_valid_schema['valid'], 'Valid schema should be accepted.' );
 $assert( '' === $result_valid_schema['message'], 'Valid schema should return empty message.' );
+
+$legacy_schema = array(
+	array(
+		'name'        => 'email',
+		'title'       => 'Email Address',
+		'field_type'  => 'email',
+		'is_required' => 'true',
+	),
+	array(
+		'name'       => 'company',
+		'title'      => 'Company',
+		'field_type' => 'text',
+	),
+);
+
+$normalized_legacy_schema = $normalize_method->invoke( null, $legacy_schema );
+$result_legacy_schema     = $method->invoke( null, $normalized_legacy_schema );
+$assert( true === $result_legacy_schema['valid'], 'Legacy schema should be normalized and accepted.' );
+$assert( 'email' === $normalized_legacy_schema[0]['key'], 'Legacy name should map to key.' );
+$assert( 'Email Address' === $normalized_legacy_schema[0]['label'], 'Legacy title should map to label.' );
+$assert( 'email' === $normalized_legacy_schema[0]['type'], 'Legacy field_type should map to type.' );
+$assert( true === $normalized_legacy_schema[0]['required'], 'Legacy is_required should map to required.' );
 
 echo "All schema validation assertions passed.\n";
