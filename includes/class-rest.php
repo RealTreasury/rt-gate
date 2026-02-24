@@ -241,10 +241,11 @@ class RTG_REST {
 		}
 
 		$forms_table = $wpdb->prefix . 'rtg_forms';
-		$form_exists = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$forms_table} WHERE id = %d", $form_id ) );
-		if ( empty( $form_exists ) ) {
+		$form_row    = $wpdb->get_row( $wpdb->prepare( "SELECT id, name FROM {$forms_table} WHERE id = %d", $form_id ) );
+		if ( empty( $form_row ) ) {
 			return new WP_Error( 'rtg_form_not_found', 'Form not found.', array( 'status' => 404 ) );
 		}
+		$form_name = isset( $form_row->name ) ? $form_row->name : '';
 
 		$leads_table = $wpdb->prefix . 'rtg_leads';
 		$ip_hash     = RTG_Utils::hash_ip( self::get_request_ip() );
@@ -360,6 +361,7 @@ class RTG_REST {
 				'assets'   => $assets,
 			)
 		);
+		RTG_Email::maybe_send_on_submit( $form_id, $lead_id, $email, $fields, $assets, $form_name );
 
 		return rest_ensure_response(
 			array(
