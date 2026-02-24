@@ -17,6 +17,8 @@ Add two optional email notifications triggered after `POST /submit`, both config
    - `confirmation_and_links` — thank-you message plus gated asset redirect URLs and expiry times.
 
 2. **Internal admin notification** — sent to a configurable list of email addresses (falls back to WP admin email). Contains all submitted fields, form name/ID, timestamp, and gated asset details with a link to the Leads admin page.
+   - Uses a branded sender header: `Online Form Submission <wordpress@realtreasury.com>`.
+   - Subject uses lead identity (first + last name and company when available), with email only as a fallback.
 
 ### Implementation details
 

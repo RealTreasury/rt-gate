@@ -76,12 +76,12 @@ class RTG_Email {
 	 */
 	public static function send_internal_notification( $recipients, $fields, $assets, $form_name, $form_id ) {
 		$site_name = self::get_site_name();
-		$lead_email = isset( $fields['email'] ) ? $fields['email'] : 'unknown';
+		$lead_identity = self::build_lead_identity( $fields );
 		$subject    = sprintf(
-			/* translators: 1: Form name 2: Lead email. */
+			/* translators: 1: Form name 2: Lead identity. */
 			__( '[%1$s] New lead submission from %2$s', 'rt-gate' ),
 			$site_name,
-			$lead_email
+			$lead_identity
 		);
 
 		$body = self::build_internal_email_html( $fields, $assets, $form_name, $form_id );
@@ -258,9 +258,66 @@ class RTG_Email {
 	 * @return bool
 	 */
 	private static function send_html_email( $to, $subject, $body ) {
-		$headers = array( 'Content-Type: text/html; charset=UTF-8' );
+		$headers = array(
+			'Content-Type: text/html; charset=UTF-8',
+			'From: Online Form Submission <wordpress@realtreasury.com>',
+		);
 
 		return wp_mail( $to, $subject, $body, $headers );
+	}
+
+	/**
+	 * Build a readable lead identity string for notification subjects.
+	 *
+	 * @param array $fields Submitted fields.
+	 * @return string
+	 */
+	private static function build_lead_identity( $fields ) {
+		$first_name = self::get_field_value( $fields, array( 'first_name', 'firstname', 'first-name' ) );
+		$last_name  = self::get_field_value( $fields, array( 'last_name', 'lastname', 'last-name' ) );
+		$company    = self::get_field_value( $fields, array( 'company', 'company_name', 'organization', 'organisation' ) );
+
+		$name = trim( trim( $first_name . ' ' . $last_name ) );
+
+		if ( ! empty( $name ) && ! empty( $company ) ) {
+			return $name . ' (' . $company . ')';
+		}
+
+		if ( ! empty( $name ) ) {
+			return $name;
+		}
+
+		if ( ! empty( $company ) ) {
+			return $company;
+		}
+
+		if ( ! empty( $fields['email'] ) ) {
+			return sanitize_text_field( (string) $fields['email'] );
+		}
+
+		return 'unknown';
+	}
+
+	/**
+	 * Get the first non-empty scalar value from a list of possible field keys.
+	 *
+	 * @param array $fields Form fields.
+	 * @param array $keys   Candidate field keys.
+	 * @return string
+	 */
+	private static function get_field_value( $fields, $keys ) {
+		foreach ( $keys as $key ) {
+			if ( ! isset( $fields[ $key ] ) || is_array( $fields[ $key ] ) ) {
+				continue;
+			}
+
+			$value = trim( sanitize_text_field( (string) $fields[ $key ] ) );
+			if ( '' !== $value ) {
+				return $value;
+			}
+		}
+
+		return '';
 	}
 
 	/**
