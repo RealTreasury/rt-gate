@@ -264,16 +264,30 @@ class RTG_Admin {
 			'email_settings' => $email_settings,
 		);
 
+		$write_result = false;
+
 		if ( $id > 0 ) {
 			$existing = $wpdb->get_row( $wpdb->prepare( "SELECT id, name, fields_schema, consent_text, email_settings FROM {$table} WHERE id = %d", $id ), ARRAY_A );
 			if ( is_array( $existing ) ) {
 				self::insert_form_revision( $id, $existing );
 			}
 
-			$wpdb->update( $table, $data, array( 'id' => $id ), array( '%s', '%s', '%s', '%s' ), array( '%d' ) );
+			$write_result = $wpdb->update( $table, $data, array( 'id' => $id ), array( '%s', '%s', '%s', '%s' ), array( '%d' ) );
 		} else {
-			$wpdb->insert( $table, $data, array( '%s', '%s', '%s', '%s' ) );
+			$write_result = $wpdb->insert( $table, $data, array( '%s', '%s', '%s', '%s' ) );
 			$id = $wpdb->insert_id;
+		}
+
+		if ( false === $write_result ) {
+			if ( ! empty( $wpdb->last_error ) ) {
+				error_log( 'RTG save_form DB error: ' . $wpdb->last_error );
+			}
+
+			$redirect_url = admin_url(
+				'admin.php?page=rtg-forms&edit_id=' . absint( $id ) . '&rtg_notice_type=error&rtg_notice=' . rawurlencode( __( 'Form could not be saved. Check database schema.', 'rt-gate' ) )
+			);
+			wp_safe_redirect( $redirect_url );
+			exit;
 		}
 
 		$redirect_url = admin_url( 'admin.php?page=rtg-forms&edit_id=' . absint( $id ) . '&rtg_notice=' . rawurlencode( 'Form saved.' ) );
