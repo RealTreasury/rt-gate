@@ -423,11 +423,23 @@ class RTG_Admin {
 
 		$table = $wpdb->prefix . 'rtg_mappings';
 		$id    = isset( $_POST['id'] ) ? absint( wp_unslash( $_POST['id'] ) ) : 0;
+		$form_id = isset( $_POST['form_id'] ) ? absint( wp_unslash( $_POST['form_id'] ) ) : 0;
+		$asset_id = isset( $_POST['asset_id'] ) ? absint( wp_unslash( $_POST['asset_id'] ) ) : 0;
+		$iframe_src_template = isset( $_POST['iframe_src_template'] ) ? sanitize_text_field( wp_unslash( $_POST['iframe_src_template'] ) ) : '';
+
+		$validation = self::validate_mapping_data( $form_id, $asset_id, $iframe_src_template );
+		if ( ! $validation['valid'] ) {
+			$redirect_url = admin_url(
+				'admin.php?page=rtg-mappings&edit_id=' . absint( $id ) . '&rtg_notice_type=error&rtg_notice=' . rawurlencode( $validation['message'] )
+			);
+			wp_safe_redirect( $redirect_url );
+			exit;
+		}
 
 		$data = array(
-			'form_id'             => isset( $_POST['form_id'] ) ? absint( wp_unslash( $_POST['form_id'] ) ) : 0,
-			'asset_id'            => isset( $_POST['asset_id'] ) ? absint( wp_unslash( $_POST['asset_id'] ) ) : 0,
-			'iframe_src_template' => isset( $_POST['iframe_src_template'] ) ? sanitize_text_field( wp_unslash( $_POST['iframe_src_template'] ) ) : '',
+			'form_id'             => $form_id,
+			'asset_id'            => $asset_id,
+			'iframe_src_template' => $iframe_src_template,
 		);
 
 		if ( $id > 0 ) {
@@ -440,6 +452,54 @@ class RTG_Admin {
 		$redirect_url = admin_url( 'admin.php?page=rtg-mappings&edit_id=' . absint( $id ) . '&rtg_notice=' . rawurlencode( 'Mapping saved.' ) );
 		wp_safe_redirect( $redirect_url );
 		exit;
+	}
+
+	/**
+	 * Validate mapping data prior to persistence.
+	 *
+	 * @param int    $form_id             Submitted form ID.
+	 * @param int    $asset_id            Submitted asset ID.
+	 * @param string $iframe_src_template Submitted iframe URL template.
+	 * @return array{valid: bool, message: string}
+	 */
+	private static function validate_mapping_data( $form_id, $asset_id, $iframe_src_template ) {
+		global $wpdb;
+
+		$forms_table  = $wpdb->prefix . 'rtg_forms';
+		$assets_table = $wpdb->prefix . 'rtg_assets';
+
+		$form_exists = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$forms_table} WHERE id = %d", $form_id ) );
+		if ( $form_exists <= 0 ) {
+			return array(
+				'valid'   => false,
+				'message' => __( 'Please select a valid form.', 'rt-gate' ),
+			);
+		}
+
+		$asset_exists = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$assets_table} WHERE id = %d", $asset_id ) );
+		if ( $asset_exists <= 0 ) {
+			return array(
+				'valid'   => false,
+				'message' => __( 'Please select a valid asset.', 'rt-gate' ),
+			);
+		}
+
+		if ( '' !== $iframe_src_template ) {
+			$has_asset_slug = false !== strpos( $iframe_src_template, '{asset_slug}' );
+			$has_token      = false !== strpos( $iframe_src_template, '{token}' );
+
+			if ( ! $has_asset_slug && ! $has_token ) {
+				return array(
+					'valid'   => false,
+					'message' => __( 'Iframe source template must include {asset_slug} or {token} when provided.', 'rt-gate' ),
+				);
+			}
+		}
+
+		return array(
+			'valid'   => true,
+			'message' => '',
+		);
 	}
 
 	/**

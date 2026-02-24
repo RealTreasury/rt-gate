@@ -118,7 +118,19 @@ Features:
 Editable fields:
 - `form_id`
 - `asset_id`
-- `iframe_src_template`
+- `iframe_src_template` (optional)
+
+Mapping validation invariants on save/edit:
+- `form_id` must reference an existing row in `rtg_forms`.
+- `asset_id` must reference an existing row in `rtg_assets`.
+- `iframe_src_template` may be blank.
+- When `iframe_src_template` is provided, it must contain at least one placeholder: `{asset_slug}` or `{token}`.
+- Validation failures redirect back to the mapping edit screen (`admin.php?page=rtg-mappings&edit_id={id}`) with `rtg_notice_type=error` and a specific `rtg_notice` message.
+
+Allowed template examples:
+- `https://example.github.io/gate/{asset_slug}`
+- `https://example.github.io/gate/{asset_slug}?t={token}`
+- `https://example.github.io/gate?t={token}`
 
 Handler path:
 - POST `rtg_action=save_mapping`
