@@ -41,11 +41,12 @@ Columns:
 - `id` bigint unsigned PK
 - `form_id` bigint unsigned (indexed)
 - `asset_id` bigint unsigned (indexed)
+- UNIQUE composite key: (`form_id`, `asset_id`) (enforced via dbDelta)
 - `iframe_src_template` longtext
 - `created_at` datetime
 
 Relationship role:
-- Implements many-to-many from forms to assets.
+- Implements many-to-many from forms to assets with at most one mapping row per (`form_id`, `asset_id`) pair.
 - Drives redirect URL generation during `/submit`.
 
 ## 4) `rtg_leads`
