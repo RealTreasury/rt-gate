@@ -27,6 +27,7 @@ $rtg_includes = array(
 	'includes/class-token.php',
 	'includes/class-events.php',
 	'includes/class-webhook.php',
+	'includes/class-email.php',
 	'includes/class-salesforce.php',
 	'includes/class-utils.php',
 );

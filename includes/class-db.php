@@ -25,6 +25,7 @@ class RTG_DB {
 	name varchar(191) NOT NULL,
 	fields_schema longtext NOT NULL,
 	consent_text longtext NOT NULL,
+	email_settings longtext NOT NULL DEFAULT '',
 	created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY  (id)
 ) {$charset_collate};";

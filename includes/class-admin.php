@@ -224,16 +224,31 @@ class RTG_Admin {
 		$decoded_schema = json_decode( $raw_schema, true );
 		$safe_schema    = is_array( $decoded_schema ) ? wp_json_encode( $decoded_schema ) : '[]';
 
+		$allowed_modes   = array( 'none', 'confirmation_only', 'confirmation_and_links' );
+		$lead_email_mode = isset( $_POST['lead_email_mode'] ) ? sanitize_key( wp_unslash( $_POST['lead_email_mode'] ) ) : 'none';
+		if ( ! in_array( $lead_email_mode, $allowed_modes, true ) ) {
+			$lead_email_mode = 'none';
+		}
+		$internal_notify     = ! empty( $_POST['internal_notify'] );
+		$internal_recipients = isset( $_POST['internal_recipients'] ) ? sanitize_textarea_field( wp_unslash( $_POST['internal_recipients'] ) ) : '';
+
+		$email_settings = wp_json_encode( array(
+			'lead_email_mode'     => $lead_email_mode,
+			'internal_notify'     => $internal_notify,
+			'internal_recipients' => $internal_recipients,
+		) );
+
 		$data = array(
-			'name'          => isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '',
-			'fields_schema' => $safe_schema,
-			'consent_text'  => sanitize_text_field( $consent_text ),
+			'name'           => isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '',
+			'fields_schema'  => $safe_schema,
+			'consent_text'   => sanitize_text_field( $consent_text ),
+			'email_settings' => $email_settings,
 		);
 
 		if ( $id > 0 ) {
-			$wpdb->update( $table, $data, array( 'id' => $id ), array( '%s', '%s', '%s' ), array( '%d' ) );
+			$wpdb->update( $table, $data, array( 'id' => $id ), array( '%s', '%s', '%s', '%s' ), array( '%d' ) );
 		} else {
-			$wpdb->insert( $table, $data, array( '%s', '%s', '%s' ) );
+			$wpdb->insert( $table, $data, array( '%s', '%s', '%s', '%s' ) );
 		}
 
 		wp_safe_redirect( admin_url( 'admin.php?page=rtg-forms&rtg_notice=' . rawurlencode( 'Form saved.' ) ) );
@@ -765,7 +780,7 @@ class RTG_Admin {
 		$asset_url = '';
 
 		if ( $edit_id > 0 ) {
-			$record = $wpdb->get_row( $wpdb->prepare( "SELECT id, name, fields_schema, consent_text FROM {$table} WHERE id = %d", $edit_id ) );
+			$record = $wpdb->get_row( $wpdb->prepare( "SELECT id, name, fields_schema, consent_text, email_settings FROM {$table} WHERE id = %d", $edit_id ) );
 		}
 
 		$nonce = wp_create_nonce( 'rtg_save_form' );
@@ -868,6 +883,63 @@ class RTG_Admin {
 						<p class="rtg-builder-status" id="rtg_builder_status" aria-live="polite"></p>
 					</div>
 				</div>
+			<?php
+			$email_settings      = array();
+			if ( $record && ! empty( $record->email_settings ) ) {
+				$email_settings = json_decode( $record->email_settings, true );
+				if ( ! is_array( $email_settings ) ) {
+					$email_settings = array();
+				}
+			}
+			$lead_email_mode     = isset( $email_settings['lead_email_mode'] ) ? $email_settings['lead_email_mode'] : 'none';
+			$internal_notify     = ! empty( $email_settings['internal_notify'] );
+			$internal_recipients = isset( $email_settings['internal_recipients'] ) ? (string) $email_settings['internal_recipients'] : '';
+			?>
+			<div class="rtg-card" style="margin-top:20px;">
+				<h3><?php echo esc_html__( 'Email Notifications', 'rt-gate' ); ?></h3>
+				<p class="description"><?php echo esc_html__( 'Configure email notifications sent when this form is submitted.', 'rt-gate' ); ?></p>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><label for="rtg_lead_email_mode"><?php echo esc_html__( 'Lead Email', 'rt-gate' ); ?></label></th>
+						<td>
+							<select id="rtg_lead_email_mode" name="lead_email_mode">
+								<option value="none" <?php selected( $lead_email_mode, 'none' ); ?>><?php echo esc_html__( 'Do not send', 'rt-gate' ); ?></option>
+								<option value="confirmation_only" <?php selected( $lead_email_mode, 'confirmation_only' ); ?>><?php echo esc_html__( 'Send confirmation email', 'rt-gate' ); ?></option>
+								<option value="confirmation_and_links" <?php selected( $lead_email_mode, 'confirmation_and_links' ); ?>><?php echo esc_html__( 'Send confirmation + asset links', 'rt-gate' ); ?></option>
+							</select>
+							<p class="description"><?php echo esc_html__( 'Choose whether to email the lead after they submit this form.', 'rt-gate' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php echo esc_html__( 'Internal Notification', 'rt-gate' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" id="rtg_internal_notify" name="internal_notify" value="1" <?php checked( $internal_notify ); ?> />
+								<?php echo esc_html__( 'Send an internal notification email when this form is submitted', 'rt-gate' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr id="rtg_internal_recipients_row" style="<?php echo $internal_notify ? '' : 'display:none;'; ?>">
+						<th scope="row"><label for="rtg_internal_recipients"><?php echo esc_html__( 'Notification Recipients', 'rt-gate' ); ?></label></th>
+						<td>
+							<textarea id="rtg_internal_recipients" name="internal_recipients" rows="3" class="large-text" placeholder="<?php echo esc_attr( get_option( 'admin_email', '' ) ); ?>"><?php echo esc_textarea( $internal_recipients ); ?></textarea>
+							<p class="description"><?php echo esc_html__( 'One email address per line. Leave blank to use the site admin email.', 'rt-gate' ); ?></p>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<script>
+			(function() {
+				var checkbox = document.getElementById('rtg_internal_notify');
+				var recipientsRow = document.getElementById('rtg_internal_recipients_row');
+				if (checkbox && recipientsRow) {
+					checkbox.addEventListener('change', function() {
+						recipientsRow.style.display = this.checked ? '' : 'none';
+					});
+				}
+			})();
+			</script>
+
 				<?php submit_button( $record ? esc_html__( 'Update Form', 'rt-gate' ) : esc_html__( 'Create Form', 'rt-gate' ) ); ?>
 			</form>
 			<script>
