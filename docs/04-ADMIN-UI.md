@@ -74,6 +74,14 @@ Server-side validation invariants on save/edit:
 - At least one field key must be exactly `email`.
 - Validation failures redirect back to the same form edit screen with `rtg_notice_type=error` and a specific `rtg_notice` message.
 
+
+Revision history:
+- When editing an existing form, the page shows a **Revision History** table (latest 20 revisions).
+- Each row shows revision ID, editor user ID, optional `restored_from_revision_id`, timestamp, and **Restore** action.
+- Every successful form update stores the prior state as a revision before writing changes.
+- Restoring a form also stores the current state as a new revision first (append-only audit trail).
+
+
 ## Assets screen (`rtg-assets`)
 
 Renderer:
@@ -137,6 +145,12 @@ Handler path:
 - POST `rtg_action=save_mapping`
 - Nonce action: `rtg_save_mapping`
 - Save method: `RTG_Admin::save_mapping()`
+
+Revision history:
+- When editing an existing mapping, the page shows a **Revision History** table (latest 20 revisions).
+- Each row shows revision ID, editor user ID, optional `restored_from_revision_id`, timestamp, and **Restore** action.
+- Every successful mapping update stores the prior state as a revision before writing changes.
+- Restoring a mapping validates the snapshot, then stores current state as a new revision first.
 
 ## Admin notices
 

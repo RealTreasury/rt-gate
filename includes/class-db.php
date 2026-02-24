@@ -19,6 +19,8 @@ class RTG_DB {
 		$leads_table    = $wpdb->prefix . 'rtg_leads';
 		$tokens_table   = $wpdb->prefix . 'rtg_tokens';
 		$events_table   = $wpdb->prefix . 'rtg_events';
+		$form_revisions_table    = $wpdb->prefix . 'rtg_form_revisions';
+		$mapping_revisions_table = $wpdb->prefix . 'rtg_mapping_revisions';
 
 		$sql_forms = "CREATE TABLE {$forms_table} (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -98,6 +100,30 @@ class RTG_DB {
 	KEY created_at (created_at)
 ) {$charset_collate};";
 
+		$sql_form_revisions = "CREATE TABLE {$form_revisions_table} (
+	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+	form_id bigint(20) unsigned NOT NULL,
+	snapshot longtext NOT NULL,
+	edited_by bigint(20) unsigned NOT NULL DEFAULT 0,
+	restored_from_revision_id bigint(20) unsigned NOT NULL DEFAULT 0,
+	created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY  (id),
+	KEY form_id (form_id),
+	KEY created_at (created_at)
+) {$charset_collate};";
+
+		$sql_mapping_revisions = "CREATE TABLE {$mapping_revisions_table} (
+	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+	mapping_id bigint(20) unsigned NOT NULL,
+	snapshot longtext NOT NULL,
+	edited_by bigint(20) unsigned NOT NULL DEFAULT 0,
+	restored_from_revision_id bigint(20) unsigned NOT NULL DEFAULT 0,
+	created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY  (id),
+	KEY mapping_id (mapping_id),
+	KEY created_at (created_at)
+) {$charset_collate};";
+
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
 		dbDelta( $sql_forms );
@@ -106,5 +132,7 @@ class RTG_DB {
 		dbDelta( $sql_leads );
 		dbDelta( $sql_tokens );
 		dbDelta( $sql_events );
+		dbDelta( $sql_form_revisions );
+		dbDelta( $sql_mapping_revisions );
 	}
 }
