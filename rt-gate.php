@@ -81,3 +81,26 @@ register_deactivation_hook( RTG_PLUGIN_FILE, function () {
 } );
 
 add_action( 'rtg_cleanup_expired_tokens', array( 'RTG_Token', 'cleanup_expired' ) );
+
+/**
+ * Enqueue the no-download script on the public front-end.
+ *
+ * Prevents visitors from downloading embedded media unless the element
+ * (or a parent) has the CSS class "Download".
+ */
+function rtg_enqueue_no_download_script() {
+	if ( is_admin() ) {
+		return;
+	}
+
+	$script_path = RTG_PLUGIN_DIR . 'assets/js/rtg-no-download.js';
+
+	wp_enqueue_script(
+		'rtg-no-download',
+		RTG_PLUGIN_URL . 'assets/js/rtg-no-download.js',
+		array(),
+		file_exists( $script_path ) ? (string) filemtime( $script_path ) : RTG_PLUGIN_VERSION,
+		true
+	);
+}
+add_action( 'wp_enqueue_scripts', 'rtg_enqueue_no_download_script' );
