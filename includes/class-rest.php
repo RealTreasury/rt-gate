@@ -24,8 +24,34 @@ class RTG_REST {
 	 */
 	public static function init() {
 		add_action( 'rest_api_init', array( __CLASS__, 'register_routes' ) );
+		add_filter( 'rest_authentication_errors', array( __CLASS__, 'allow_public_access' ), 10, 1 );
 		add_filter( 'rest_pre_dispatch', array( __CLASS__, 'rate_limit_requests' ), 10, 3 );
 		add_filter( 'rest_pre_serve_request', array( __CLASS__, 'add_cors_headers' ), 10, 4 );
+	}
+
+	/**
+	 * Allow unauthenticated access to public rtg/v1 routes.
+	 *
+	 * Security plugins (Wordfence, iThemes, etc.) and application-password
+	 * authentication can hook into rest_authentication_errors and return a
+	 * WP_Error for every unauthenticated request, producing a 403 before
+	 * the route's own permission_callback is ever evaluated.  This filter
+	 * short-circuits that check for the rtg/v1 namespace so that the four
+	 * public endpoints (/form, /submit, /validate, /event) remain accessible
+	 * from browser JavaScript on gated pages.
+	 *
+	 * @param WP_Error|null|true $errors Existing authentication result.
+	 * @return WP_Error|null|true
+	 */
+	public static function allow_public_access( $errors ) {
+		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+
+		if ( false !== strpos( $request_uri, '/wp-json/' . self::REST_NAMESPACE . '/' ) ||
+			 false !== strpos( $request_uri, '/?rest_route=/' . self::REST_NAMESPACE . '/' ) ) {
+			return true;
+		}
+
+		return $errors;
 	}
 
 	/**
