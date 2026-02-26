@@ -55,7 +55,7 @@ Fetch the public form schema so external pages can dynamically render the correc
       "placeholder": "Jane Smith"
     }
   ],
-  "consent_text": "I agree to receive updates and accept the privacy policy: https://example.com/privacy-policy/"
+  "consent_text": "I agree to receive updates and accept the <a href=\"https://example.com/privacy-policy/\" target=\"_blank\" rel=\"noopener noreferrer\">privacy policy</a>."
 }
 ```
 
