@@ -131,6 +131,23 @@ class RTG_REST {
 
 		register_rest_route(
 			self::REST_NAMESPACE,
+			'/gate/(?P<asset_slug>[a-z0-9-]+)',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( __CLASS__, 'handle_gate_schema' ),
+				'permission_callback' => '__return_true',
+				'args'                => array(
+					'asset_slug' => array(
+						'required'          => true,
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_title',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::REST_NAMESPACE,
 			'/event',
 			array(
 				'methods'             => 'POST',
@@ -427,6 +444,53 @@ class RTG_REST {
 				'form_id'      => (int) $form->id,
 				'fields'       => $fields,
 				'consent_text' => (string) $form->consent_text,
+			)
+		);
+	}
+
+	/**
+	 * Handle GET /gate/{asset_slug}.
+	 *
+	 * Resolves an asset slug to its mapped form via the rtg_mappings table
+	 * and returns the form schema. This allows frontend pages to identify
+	 * themselves by asset slug instead of hardcoding a form ID.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public static function handle_gate_schema( WP_REST_Request $request ) {
+		global $wpdb;
+
+		$asset_slug = sanitize_title( (string) $request->get_param( 'asset_slug' ) );
+		$asset      = self::find_asset_by_slug( $asset_slug );
+
+		if ( empty( $asset ) ) {
+			return new WP_Error( 'rtg_asset_not_found', 'Asset not found.', array( 'status' => 404 ) );
+		}
+
+		$form_id = self::find_form_id_for_asset( (int) $asset->id );
+		if ( $form_id <= 0 ) {
+			return new WP_Error( 'rtg_no_mapping', 'No form mapped to this asset.', array( 'status' => 404 ) );
+		}
+
+		$forms_table = $wpdb->prefix . 'rtg_forms';
+		$form        = $wpdb->get_row( $wpdb->prepare( "SELECT id, fields_schema, consent_text FROM {$forms_table} WHERE id = %d", $form_id ) );
+
+		if ( empty( $form ) ) {
+			return new WP_Error( 'rtg_form_not_found', 'Mapped form not found.', array( 'status' => 404 ) );
+		}
+
+		$fields = json_decode( (string) $form->fields_schema, true );
+		if ( ! is_array( $fields ) ) {
+			$fields = array();
+		}
+
+		return rest_ensure_response(
+			array(
+				'form_id'      => (int) $form->id,
+				'fields'       => $fields,
+				'consent_text' => (string) $form->consent_text,
+				'asset_slug'   => $asset_slug,
 			)
 		);
 	}
