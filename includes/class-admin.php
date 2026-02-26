@@ -223,9 +223,10 @@ class RTG_Admin {
 
 		$privacy_policy_url = self::get_privacy_policy_url();
 		$consent_text       = sprintf(
-			/* translators: %s: Privacy policy URL. */
-			__( 'I agree to receive updates and accept the privacy policy: %s', 'rt-gate' ),
-			$privacy_policy_url
+			/* translators: %1$s: opening <a> tag, %2$s: closing </a> tag. */
+			__( 'I agree to receive updates and accept the %1$sprivacy policy%2$s.', 'rt-gate' ),
+			'<a href="' . esc_url( $privacy_policy_url ) . '" target="_blank" rel="noopener noreferrer">',
+			'</a>'
 		);
 
 		$raw_schema     = isset( $_POST['fields_schema'] ) ? wp_unslash( $_POST['fields_schema'] ) : '';
@@ -260,7 +261,7 @@ class RTG_Admin {
 		$data = array(
 			'name'           => isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '',
 			'fields_schema'  => $safe_schema,
-			'consent_text'   => sanitize_text_field( $consent_text ),
+			'consent_text'   => wp_kses( $consent_text, array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) ) ),
 			'email_settings' => $email_settings,
 		);
 
@@ -633,7 +634,7 @@ class RTG_Admin {
 			array(
 				'name'           => isset( $snapshot['name'] ) ? sanitize_text_field( $snapshot['name'] ) : '',
 				'fields_schema'  => isset( $snapshot['fields_schema'] ) ? (string) $snapshot['fields_schema'] : '[]',
-				'consent_text'   => isset( $snapshot['consent_text'] ) ? sanitize_text_field( $snapshot['consent_text'] ) : '',
+				'consent_text'   => isset( $snapshot['consent_text'] ) ? wp_kses( $snapshot['consent_text'], array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) ) ) : '',
 				'email_settings' => isset( $snapshot['email_settings'] ) ? (string) $snapshot['email_settings'] : '',
 			),
 			array( 'id' => $form_id ),
@@ -1210,9 +1211,10 @@ class RTG_Admin {
 			<?php
 			$privacy_policy_url = self::get_privacy_policy_url();
 			$standard_consent   = sprintf(
-				/* translators: %s: Privacy policy URL. */
-				esc_html__( 'I agree to receive updates and accept the privacy policy: %s', 'rt-gate' ),
-				esc_url( $privacy_policy_url )
+				/* translators: %1$s: opening <a> tag, %2$s: closing </a> tag. */
+				__( 'I agree to receive updates and accept the %1$sprivacy policy%2$s.', 'rt-gate' ),
+				'<a href="' . esc_url( $privacy_policy_url ) . '" target="_blank" rel="noopener noreferrer">',
+				'</a>'
 			);
 			?>
 
@@ -1231,10 +1233,9 @@ class RTG_Admin {
 							<tr>
 								<th scope="row"><?php echo esc_html__( 'Consent', 'rt-gate' ); ?></th>
 								<td>
-									<p><?php echo esc_html( $standard_consent ); ?></p>
+									<p><?php echo wp_kses( $standard_consent, array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) ) ); ?></p>
 									<p class="description">
 										<?php echo esc_html__( 'This text is automatically used for every form.', 'rt-gate' ); ?>
-										<a href="<?php echo esc_url( $privacy_policy_url ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html__( 'Review Privacy Policy', 'rt-gate' ); ?></a>
 									</p>
 								</td>
 							</tr>
