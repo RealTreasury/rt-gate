@@ -17,6 +17,57 @@ When onboarding a new gated page, complete all of the following steps:
    - `window.RTG_CONFIG.formId` (when the page requires form binding)
 4. Run `node scripts/validate-rtg-page-config.mjs` before merge.
 
+
+## `formIdPolicy` guidance and examples
+
+Use `formIdPolicy` when a page entry needs to clarify how `formId` should be interpreted:
+
+### 1) `canonical`
+Use when the page must enforce a specific form id.
+
+```js
+{
+  pagePath: '/gate/treasury-guide',
+  assetSlug: 'treasury-guide',
+  formId: 42,
+  storageKey: 'rtg:treasury-guide',
+  formIdPolicy: 'canonical'
+}
+```
+
+### 2) `mapping-driven`
+Use when the page intentionally allows runtime mapping behavior and does not pin a canonical form id.
+
+```js
+{
+  pagePath: '/gate/liquidity-overview',
+  assetSlug: 'liquidity-overview',
+  formId: null,
+  storageKey: 'rtg:liquidity-overview',
+  formIdPolicy: 'mapping-driven',
+  notes: 'Asset is shared across campaigns and resolved via mapping manifest.'
+}
+```
+
+### 3) `pending`
+Use for temporary onboarding states where `formId` is currently unknown and follow-up is required.
+
+```js
+{
+  pagePath: '/gate/q4-playbook',
+  assetSlug: 'q4-playbook',
+  formId: null,
+  storageKey: 'rtg:q4-playbook',
+  formIdPolicy: 'pending',
+  notes: 'Waiting on marketing ops to finalize the canonical form id.'
+}
+```
+
+Validation requirements enforced by `node scripts/validate-rtg-page-config.mjs`:
+- If `formId` is `null`, `formIdPolicy` is required.
+- If `formIdPolicy` is `pending`, `notes` must be non-empty.
+- If `formIdPolicy` is `canonical`, `formId` cannot be `null`.
+
 ## Definition of ready
 
 - **Pass:** The page manifest entry exists and includes `pagePath`, `assetSlug`, `formId`, and `storageKey`.
