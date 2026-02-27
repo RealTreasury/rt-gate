@@ -69,7 +69,12 @@ class RTG_REST {
 				'permission_callback' => '__return_true',
 				'args'                => array(
 					'form_id' => array(
-						'required'          => true,
+						'required'          => false,
+						'type'              => 'integer',
+						'sanitize_callback' => 'absint',
+					),
+					'mapping_id' => array(
+						'required'          => false,
 						'type'              => 'integer',
 						'sanitize_callback' => 'absint',
 					),
@@ -251,18 +256,42 @@ class RTG_REST {
 	public static function handle_submit( WP_REST_Request $request ) {
 		global $wpdb;
 
-		$form_id  = absint( $request->get_param( 'form_id' ) );
-		$fields   = $request->get_param( 'fields' );
-		$consent  = $request->get_param( 'consent' );
-		$email    = '';
-		$lead_id  = 0;
-		$assets   = array();
-		$primary  = '';
-		$honeypot = self::extract_honeypot_value( $request, $fields );
-		$gate_url = (string) $request->get_param( 'gate_url' );
+		$mapping_id = absint( $request->get_param( 'mapping_id' ) );
+		$form_id    = absint( $request->get_param( 'form_id' ) );
+		$fields     = $request->get_param( 'fields' );
+		$consent    = $request->get_param( 'consent' );
+		$email      = '';
+		$lead_id    = 0;
+		$assets     = array();
+		$primary    = '';
+		$honeypot   = self::extract_honeypot_value( $request, $fields );
+		$gate_url   = (string) $request->get_param( 'gate_url' );
+
+		/* --- Resolve form_id (and optional single-asset scope) from mapping_id --- */
+		$scoped_mapping = null;
+
+		if ( $mapping_id > 0 ) {
+			$mappings_table = $wpdb->prefix . 'rtg_mappings';
+			$assets_table   = $wpdb->prefix . 'rtg_assets';
+			$scoped_mapping = $wpdb->get_row(
+				$wpdb->prepare(
+					"SELECT m.id, m.form_id, m.asset_id, m.iframe_src_template, a.slug
+					FROM {$mappings_table} m
+					INNER JOIN {$assets_table} a ON a.id = m.asset_id
+					WHERE m.id = %d",
+					$mapping_id
+				)
+			);
+
+			if ( empty( $scoped_mapping ) ) {
+				return new WP_Error( 'rtg_mapping_not_found', 'Mapping not found.', array( 'status' => 404 ) );
+			}
+
+			$form_id = (int) $scoped_mapping->form_id;
+		}
 
 		if ( $form_id <= 0 || ! is_array( $fields ) || true !== (bool) $consent ) {
-			return new WP_Error( 'rtg_invalid_submit', 'form_id, fields, and consent=true are required.', array( 'status' => 400 ) );
+			return new WP_Error( 'rtg_invalid_submit', 'mapping_id (or form_id), fields, and consent=true are required.', array( 'status' => 400 ) );
 		}
 
 		if ( '' !== $honeypot ) {
@@ -329,18 +358,23 @@ class RTG_REST {
 			return new WP_Error( 'rtg_lead_upsert_failed', 'Unable to save lead.', array( 'status' => 500 ) );
 		}
 
-		$mappings_table = $wpdb->prefix . 'rtg_mappings';
-		$assets_table   = $wpdb->prefix . 'rtg_assets';
-		$mapped_assets  = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT a.id AS asset_id, a.slug, m.iframe_src_template
-				FROM {$mappings_table} m
-				INNER JOIN {$assets_table} a ON a.id = m.asset_id
-				WHERE m.form_id = %d
-				ORDER BY m.id ASC",
-				$form_id
-			)
-		);
+		/* --- Resolve mapped assets: single (mapping_id) or all (form_id fallback) --- */
+		if ( $scoped_mapping ) {
+			$mapped_assets = array( $scoped_mapping );
+		} else {
+			$mappings_table = $wpdb->prefix . 'rtg_mappings';
+			$assets_table   = $wpdb->prefix . 'rtg_assets';
+			$mapped_assets  = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT a.id AS asset_id, a.slug, m.iframe_src_template
+					FROM {$mappings_table} m
+					INNER JOIN {$assets_table} a ON a.id = m.asset_id
+					WHERE m.form_id = %d
+					ORDER BY m.id ASC",
+					$form_id
+				)
+			);
+		}
 
 		if ( empty( $mapped_assets ) ) {
 			return rest_ensure_response(
@@ -468,10 +502,12 @@ class RTG_REST {
 			return new WP_Error( 'rtg_asset_not_found', 'Asset not found.', array( 'status' => 404 ) );
 		}
 
-		$form_id = self::find_form_id_for_asset( (int) $asset->id );
-		if ( $form_id <= 0 ) {
+		$mapping = self::find_mapping_for_asset( (int) $asset->id );
+		if ( empty( $mapping ) ) {
 			return new WP_Error( 'rtg_no_mapping', 'No form mapped to this asset.', array( 'status' => 404 ) );
 		}
+
+		$form_id = (int) $mapping->form_id;
 
 		$forms_table = $wpdb->prefix . 'rtg_forms';
 		$form        = $wpdb->get_row( $wpdb->prepare( "SELECT id, fields_schema, consent_text FROM {$forms_table} WHERE id = %d", $form_id ) );
@@ -488,6 +524,7 @@ class RTG_REST {
 		return rest_ensure_response(
 			array(
 				'form_id'      => (int) $form->id,
+				'mapping_id'   => (int) $mapping->id,
 				'fields'       => $fields,
 				'consent_text' => (string) $form->consent_text,
 				'asset_slug'   => $asset_slug,
@@ -628,18 +665,34 @@ class RTG_REST {
 	}
 
 	/**
+	 * Find the first mapping row for a given asset.
+	 *
+	 * @param int $asset_id Asset ID.
+	 * @return object|null Row with id, form_id, asset_id, iframe_src_template.
+	 */
+	private static function find_mapping_for_asset( $asset_id ) {
+		global $wpdb;
+
+		$mappings_table = $wpdb->prefix . 'rtg_mappings';
+
+		return $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT id, form_id, asset_id, iframe_src_template FROM {$mappings_table} WHERE asset_id = %d ORDER BY id ASC LIMIT 1",
+				$asset_id
+			)
+		);
+	}
+
+	/**
 	 * Find a likely form ID for an asset.
 	 *
 	 * @param int $asset_id Asset ID.
 	 * @return int
 	 */
 	private static function find_form_id_for_asset( $asset_id ) {
-		global $wpdb;
+		$mapping = self::find_mapping_for_asset( $asset_id );
 
-		$mappings_table = $wpdb->prefix . 'rtg_mappings';
-		$form_id        = (int) $wpdb->get_var( $wpdb->prepare( "SELECT form_id FROM {$mappings_table} WHERE asset_id = %d ORDER BY id ASC LIMIT 1", $asset_id ) );
-
-		return max( 0, $form_id );
+		return $mapping ? max( 0, (int) $mapping->form_id ) : 0;
 	}
 
 	/**
