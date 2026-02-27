@@ -17,6 +17,66 @@ When onboarding a new gated page, complete all of the following steps:
    - `window.RTG_CONFIG.formId` (when the page requires form binding)
 4. Run `node scripts/validate-rtg-page-config.mjs` before merge.
 
+## Entry templates
+
+Use the following templates when adding new manifest entries so each key is present and naming stays consistent.
+
+### `config/rtg-page-gating-manifest.js` entry template
+
+```js
+{
+  // Route (pathname only) where the gated page is hosted.
+  pagePath: '/gate/<page-slug>',
+
+  // Slug used by RTG token validation and asset lookup.
+  assetSlug: '<asset-slug>',
+
+  // Canonical form id for this page, or null when mapping-driven/pending.
+  formId: 42,
+
+  // REQUIRED collision-resistant key pattern: rtg:<assetSlug>:<pageSlug>:v1
+  // Example: rtg:treasury-guide:treasury-guide:v1
+  storageKey: 'rtg:<asset-slug>:<page-slug>:v1',
+
+  // Optional policy when formId needs explicit interpretation.
+  // Allowed values: 'canonical' | 'mapping-driven' | 'pending'
+  formIdPolicy: 'canonical',
+
+  // Required when formIdPolicy is 'pending'; optional otherwise.
+  notes: 'Use for rollout context, ownership, or follow-up instructions.'
+}
+```
+
+### `config/rtg-form-asset-manifest.js` entry template
+
+```js
+{
+  assetSlug: '<asset-slug>',
+
+  // Canonical policy:
+  // - set to a numeric form id when the asset is bound to one canonical form.
+  // - set to null when the asset intentionally uses mapping-driven resolution.
+  canonicalFormId: 42,
+
+  // Optional human context for mapping-driven or transitional states.
+  notes: 'Describe why canonicalFormId is null, and where form routing is resolved.'
+}
+
+// Canonical example
+{
+  assetSlug: 'treasury-guide',
+  canonicalFormId: 42,
+  notes: 'Canonical form id for the treasury-guide asset.'
+}
+
+// Mapping-driven example
+{
+  assetSlug: 'liquidity-overview',
+  canonicalFormId: null,
+  notes: 'Resolved by runtime mapping; pair page storage keys like rtg:liquidity-overview:<page-slug>:v1.'
+}
+```
+
 
 ## `formIdPolicy` guidance and examples
 
@@ -30,7 +90,7 @@ Use when the page must enforce a specific form id.
   pagePath: '/gate/treasury-guide',
   assetSlug: 'treasury-guide',
   formId: 42,
-  storageKey: 'rtg:treasury-guide',
+  storageKey: 'rtg:treasury-guide:treasury-guide:v1',
   formIdPolicy: 'canonical'
 }
 ```
@@ -43,7 +103,7 @@ Use when the page intentionally allows runtime mapping behavior and does not pin
   pagePath: '/gate/liquidity-overview',
   assetSlug: 'liquidity-overview',
   formId: null,
-  storageKey: 'rtg:liquidity-overview',
+  storageKey: 'rtg:liquidity-overview:liquidity-overview:v1',
   formIdPolicy: 'mapping-driven',
   notes: 'Asset is shared across campaigns and resolved via mapping manifest.'
 }
@@ -57,7 +117,7 @@ Use for temporary onboarding states where `formId` is currently unknown and foll
   pagePath: '/gate/q4-playbook',
   assetSlug: 'q4-playbook',
   formId: null,
-  storageKey: 'rtg:q4-playbook',
+  storageKey: 'rtg:q4-playbook:q4-playbook:v1',
   formIdPolicy: 'pending',
   notes: 'Waiting on marketing ops to finalize the canonical form id.'
 }
