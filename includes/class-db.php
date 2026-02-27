@@ -47,6 +47,7 @@ class RTG_DB {
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 	form_id bigint(20) unsigned NOT NULL,
 	asset_id bigint(20) unsigned NOT NULL,
+	cf7_form_id bigint(20) unsigned NOT NULL DEFAULT 0,
 	iframe_src_template longtext NOT NULL,
 	created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY  (id),
