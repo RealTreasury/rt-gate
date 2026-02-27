@@ -91,6 +91,11 @@ class RTG_REST {
 						'type'              => 'string',
 						'sanitize_callback' => 'esc_url_raw',
 					),
+					'asset_slug' => array(
+						'required'          => false,
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_title',
+					),
 				),
 			)
 		);
@@ -358,9 +363,31 @@ class RTG_REST {
 			return new WP_Error( 'rtg_lead_upsert_failed', 'Unable to save lead.', array( 'status' => 500 ) );
 		}
 
-		/* --- Resolve mapped assets: single (mapping_id) or all (form_id fallback) --- */
+		/* --- Resolve mapped assets: single (mapping_id), scoped (asset_slug), or all (form_id fallback) --- */
+		$submit_asset_slug = sanitize_title( (string) $request->get_param( 'asset_slug' ) );
+
 		if ( $scoped_mapping ) {
 			$mapped_assets = array( $scoped_mapping );
+		} elseif ( ! empty( $submit_asset_slug ) ) {
+			$mappings_table = $wpdb->prefix . 'rtg_mappings';
+			$assets_table   = $wpdb->prefix . 'rtg_assets';
+			$scoped_row     = $wpdb->get_row(
+				$wpdb->prepare(
+					"SELECT a.id AS asset_id, a.slug, m.iframe_src_template
+					FROM {$mappings_table} m
+					INNER JOIN {$assets_table} a ON a.id = m.asset_id
+					WHERE m.form_id = %d AND a.slug = %s
+					ORDER BY m.id ASC
+					LIMIT 1",
+					$form_id,
+					$submit_asset_slug
+				)
+			);
+			if ( $scoped_row ) {
+				$mapped_assets = array( $scoped_row );
+			} else {
+				$mapped_assets = array();
+			}
 		} else {
 			$mappings_table = $wpdb->prefix . 'rtg_mappings';
 			$assets_table   = $wpdb->prefix . 'rtg_assets';
