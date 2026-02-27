@@ -14,6 +14,11 @@
   const WP_SITE_URL = 'https://realtreasury.com';
   const API_BASE = `${WP_SITE_URL}/wp-json/rtg/v1`;
 
+  window.RTG_CONFIG = window.RTG_CONFIG || {
+    assetSlug: 'replace-with-asset-slug',
+    formId: null,
+  };
+
   /**
    * Safely parse JSON responses and throw on non-2xx.
    */

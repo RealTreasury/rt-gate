@@ -17,6 +17,16 @@ When onboarding a new gated page, complete all of the following steps:
    - `window.RTG_CONFIG.formId` (when the page requires form binding)
 4. Run `node scripts/validate-rtg-page-config.mjs` before merge.
 
+
+## Page contract
+
+Any page that calls RT Gate endpoints (`/form/{id}`, `/submit`, `/validate`, or `/gate/{slug}` usage) must comply with both requirements below:
+
+- Define `window.RTG_CONFIG` on the page.
+- Add the page to `config/rtg-page-gating-manifest.js`.
+
+The validation script reports a warning summary with file paths when endpoint markers are detected in candidate files that do not define `window.RTG_CONFIG`, and then fails validation so the contract is fixed before merge.
+
 ## Entry templates
 
 Use the following templates when adding new manifest entries so each key is present and naming stays consistent.
