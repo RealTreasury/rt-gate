@@ -24,3 +24,11 @@ When onboarding a new gated page, complete all of the following steps:
 - **Pass:** Page source exposes the required `window.RTG_CONFIG` values for runtime validation.
 - **Pass:** `node scripts/validate-rtg-page-config.mjs` passes with no errors.
 - **Fail:** Any checklist item above is missing, inconsistent, or validation fails.
+
+## Open Form-ID Follow-ups
+
+Any page manifest entry using `formId: null` for an asset that is **not** permanently mapping-driven must be tracked in this table until the `formId` is resolved.
+
+| pagePath | assetSlug | temporary formId state (`null`) | owner | target date | notes |
+| --- | --- | --- | --- | --- | --- |
+| _Add follow-up item_ | _asset slug_ | `null` | _owner_ | _YYYY-MM-DD_ | _Reason for temporary null and planned fix_ |
