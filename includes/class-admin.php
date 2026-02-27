@@ -514,7 +514,6 @@ class RTG_Admin {
 		$id    = isset( $_POST['id'] ) ? absint( wp_unslash( $_POST['id'] ) ) : 0;
 		$form_id = isset( $_POST['form_id'] ) ? absint( wp_unslash( $_POST['form_id'] ) ) : 0;
 		$asset_id = isset( $_POST['asset_id'] ) ? absint( wp_unslash( $_POST['asset_id'] ) ) : 0;
-		$cf7_form_id = isset( $_POST['cf7_form_id'] ) ? absint( wp_unslash( $_POST['cf7_form_id'] ) ) : 0;
 		$iframe_src_template = isset( $_POST['iframe_src_template'] ) ? sanitize_text_field( wp_unslash( $_POST['iframe_src_template'] ) ) : '';
 
 		$validation = self::validate_mapping_data( $form_id, $asset_id, $iframe_src_template, $id );
@@ -529,19 +528,18 @@ class RTG_Admin {
 		$data = array(
 			'form_id'             => $form_id,
 			'asset_id'            => $asset_id,
-			'cf7_form_id'         => $cf7_form_id,
 			'iframe_src_template' => $iframe_src_template,
 		);
 
 		if ( $id > 0 ) {
-			$existing = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_id, asset_id, cf7_form_id, iframe_src_template FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+			$existing = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_id, asset_id, iframe_src_template FROM {$table} WHERE id = %d", $id ), ARRAY_A );
 			if ( is_array( $existing ) ) {
 				self::insert_mapping_revision( $id, $existing );
 			}
 
-			$wpdb->update( $table, $data, array( 'id' => $id ), array( '%d', '%d', '%d', '%s' ), array( '%d' ) );
+			$wpdb->update( $table, $data, array( 'id' => $id ), array( '%d', '%d', '%s' ), array( '%d' ) );
 		} else {
-			$wpdb->insert( $table, $data, array( '%d', '%d', '%d', '%s' ) );
+			$wpdb->insert( $table, $data, array( '%d', '%d', '%s' ) );
 			$id = $wpdb->insert_id;
 		}
 
@@ -667,7 +665,7 @@ class RTG_Admin {
 			exit;
 		}
 
-		$current = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_id, asset_id, cf7_form_id, iframe_src_template FROM {$mappings_table} WHERE id = %d", $mapping_id ), ARRAY_A );
+		$current = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_id, asset_id, iframe_src_template FROM {$mappings_table} WHERE id = %d", $mapping_id ), ARRAY_A );
 		if ( ! is_array( $current ) ) {
 			wp_safe_redirect( admin_url( 'admin.php?page=rtg-mappings&rtg_notice_type=error&rtg_notice=' . rawurlencode( 'Mapping not found.' ) ) );
 			exit;
@@ -681,7 +679,6 @@ class RTG_Admin {
 
 		$form_id             = isset( $snapshot['form_id'] ) ? absint( $snapshot['form_id'] ) : 0;
 		$asset_id            = isset( $snapshot['asset_id'] ) ? absint( $snapshot['asset_id'] ) : 0;
-		$cf7_form_id         = isset( $snapshot['cf7_form_id'] ) ? absint( $snapshot['cf7_form_id'] ) : 0;
 		$iframe_src_template = isset( $snapshot['iframe_src_template'] ) ? sanitize_text_field( $snapshot['iframe_src_template'] ) : '';
 		$validation          = self::validate_mapping_data( $form_id, $asset_id, $iframe_src_template, $mapping_id );
 		if ( ! $validation['valid'] ) {
@@ -695,11 +692,10 @@ class RTG_Admin {
 			array(
 				'form_id'             => $form_id,
 				'asset_id'            => $asset_id,
-				'cf7_form_id'         => $cf7_form_id,
 				'iframe_src_template' => $iframe_src_template,
 			),
 			array( 'id' => $mapping_id ),
-			array( '%d', '%d', '%d', '%s' ),
+			array( '%d', '%d', '%s' ),
 			array( '%d' )
 		);
 
@@ -1889,28 +1885,15 @@ class RTG_Admin {
 		$forms_table    = $wpdb->prefix . 'rtg_forms';
 		$assets_table   = $wpdb->prefix . 'rtg_assets';
 
-		$mappings = $wpdb->get_results( "SELECT m.id, m.form_id, m.asset_id, m.cf7_form_id, m.iframe_src_template, m.created_at, f.name AS form_name, a.name AS asset_name FROM {$mappings_table} m LEFT JOIN {$forms_table} f ON f.id = m.form_id LEFT JOIN {$assets_table} a ON a.id = m.asset_id ORDER BY m.id DESC" );
+		$mappings = $wpdb->get_results( "SELECT m.id, m.form_id, m.asset_id, m.iframe_src_template, m.created_at, f.name AS form_name, a.name AS asset_name FROM {$mappings_table} m LEFT JOIN {$forms_table} f ON f.id = m.form_id LEFT JOIN {$assets_table} a ON a.id = m.asset_id ORDER BY m.id DESC" );
 		$forms    = $wpdb->get_results( "SELECT id, name FROM {$forms_table} ORDER BY name ASC" );
 		$assets   = $wpdb->get_results( "SELECT id, name FROM {$assets_table} ORDER BY name ASC" );
 		$edit_id  = isset( $_GET['edit_id'] ) ? absint( wp_unslash( $_GET['edit_id'] ) ) : 0;
 		$record   = null;
 		$mapping_revisions = array();
 
-		$cf7_forms = array();
-		if ( class_exists( 'WPCF7_ContactForm' ) ) {
-			$cf7_list = WPCF7_ContactForm::find();
-			if ( is_array( $cf7_list ) ) {
-				foreach ( $cf7_list as $cf7 ) {
-					$cf7_forms[] = array(
-						'id'    => $cf7->id(),
-						'title' => $cf7->title(),
-					);
-				}
-			}
-		}
-
 		if ( $edit_id > 0 ) {
-			$record = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_id, asset_id, cf7_form_id, iframe_src_template FROM {$mappings_table} WHERE id = %d", $edit_id ) );
+			$record = $wpdb->get_row( $wpdb->prepare( "SELECT id, form_id, asset_id, iframe_src_template FROM {$mappings_table} WHERE id = %d", $edit_id ) );
 			if ( $record ) {
 				$revisions_table   = $wpdb->prefix . 'rtg_mapping_revisions';
 				$mapping_revisions = $wpdb->get_results( $wpdb->prepare( "SELECT id, edited_by, restored_from_revision_id, snapshot, created_at FROM {$revisions_table} WHERE mapping_id = %d ORDER BY id DESC LIMIT 20", $edit_id ) );
@@ -1946,18 +1929,6 @@ class RTG_Admin {
 									<option value="<?php echo esc_attr( $asset->id ); ?>" <?php selected( $record ? $record->asset_id : 0, $asset->id ); ?>><?php echo esc_html( $asset->name ); ?></option>
 								<?php endforeach; ?>
 							</select>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="rtg_cf7_form_id"><?php echo esc_html__( 'WordPress Form (CF7)', 'rt-gate' ); ?></label></th>
-						<td>
-							<select id="rtg_cf7_form_id" name="cf7_form_id">
-								<option value="0"><?php echo esc_html__( '— Use default (Portal Access setting) —', 'rt-gate' ); ?></option>
-								<?php foreach ( $cf7_forms as $cf7 ) : ?>
-									<option value="<?php echo esc_attr( $cf7['id'] ); ?>" <?php selected( $record ? (int) $record->cf7_form_id : 0, (int) $cf7['id'] ); ?>><?php echo esc_html( $cf7['title'] ); ?> (ID: <?php echo esc_html( $cf7['id'] ); ?>)</option>
-								<?php endforeach; ?>
-							</select>
-							<p class="description"><?php echo esc_html__( 'Contact Form 7 form to display on WordPress pages for this asset. Leave as default to use the global Portal Access form.', 'rt-gate' ); ?></p>
 						</td>
 					</tr>
 					<tr>
@@ -2026,7 +1997,6 @@ class RTG_Admin {
 						<th><?php echo esc_html__( 'ID', 'rt-gate' ); ?></th>
 						<th><?php echo esc_html__( 'Form', 'rt-gate' ); ?></th>
 						<th><?php echo esc_html__( 'Asset', 'rt-gate' ); ?></th>
-						<th><?php echo esc_html__( 'WP Form (CF7)', 'rt-gate' ); ?></th>
 						<th><?php echo esc_html__( 'Iframe Template', 'rt-gate' ); ?></th>
 						<th><?php echo esc_html__( 'Created', 'rt-gate' ); ?></th>
 						<th><?php echo esc_html__( 'Actions', 'rt-gate' ); ?></th>
@@ -2035,18 +2005,10 @@ class RTG_Admin {
 				<tbody>
 					<?php if ( ! empty( $mappings ) ) : ?>
 						<?php foreach ( $mappings as $mapping ) : ?>
-							<?php
-							$cf7_label = esc_html__( '(default)', 'rt-gate' );
-							if ( ! empty( $mapping->cf7_form_id ) && (int) $mapping->cf7_form_id > 0 && class_exists( 'WPCF7_ContactForm' ) ) {
-								$cf7_instance = WPCF7_ContactForm::get_instance( (int) $mapping->cf7_form_id );
-								$cf7_label    = $cf7_instance ? esc_html( $cf7_instance->title() ) . ' (ID: ' . esc_html( $mapping->cf7_form_id ) . ')' : esc_html__( 'ID: ', 'rt-gate' ) . esc_html( $mapping->cf7_form_id );
-							}
-							?>
 							<tr>
 								<td><?php echo esc_html( $mapping->id ); ?></td>
 								<td><?php echo esc_html( $mapping->form_name ); ?></td>
 								<td><?php echo esc_html( $mapping->asset_name ); ?></td>
-								<td><?php echo $cf7_label; ?></td>
 								<td><?php echo esc_html( $mapping->iframe_src_template ); ?></td>
 								<td><?php echo esc_html( $mapping->created_at ); ?></td>
 								<td>
@@ -2062,7 +2024,7 @@ class RTG_Admin {
 							</tr>
 						<?php endforeach; ?>
 					<?php else : ?>
-						<tr><td colspan="7"><?php echo esc_html__( 'No mappings found.', 'rt-gate' ); ?></td></tr>
+						<tr><td colspan="6"><?php echo esc_html__( 'No mappings found.', 'rt-gate' ); ?></td></tr>
 					<?php endif; ?>
 				</tbody>
 			</table>

@@ -485,15 +485,12 @@ class RTG_REST {
 			$fields = array();
 		}
 
-		$cf7_form_id = self::find_cf7_form_id_for_asset( (int) $asset->id );
-
 		return rest_ensure_response(
 			array(
 				'form_id'      => (int) $form->id,
 				'fields'       => $fields,
 				'consent_text' => (string) $form->consent_text,
 				'asset_slug'   => $asset_slug,
-				'cf7_form_id'  => $cf7_form_id,
 			)
 		);
 	}
@@ -643,21 +640,6 @@ class RTG_REST {
 		$form_id        = (int) $wpdb->get_var( $wpdb->prepare( "SELECT form_id FROM {$mappings_table} WHERE asset_id = %d ORDER BY id ASC LIMIT 1", $asset_id ) );
 
 		return max( 0, $form_id );
-	}
-
-	/**
-	 * Find the CF7 form ID mapped to an asset.
-	 *
-	 * @param int $asset_id Asset ID.
-	 * @return int CF7 form ID or 0 if not set.
-	 */
-	private static function find_cf7_form_id_for_asset( $asset_id ) {
-		global $wpdb;
-
-		$mappings_table = $wpdb->prefix . 'rtg_mappings';
-		$cf7_form_id    = (int) $wpdb->get_var( $wpdb->prepare( "SELECT cf7_form_id FROM {$mappings_table} WHERE asset_id = %d ORDER BY id ASC LIMIT 1", $asset_id ) );
-
-		return max( 0, $cf7_form_id );
 	}
 
 	/**
