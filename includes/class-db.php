@@ -47,7 +47,6 @@ class RTG_DB {
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 	form_id bigint(20) unsigned NOT NULL,
 	asset_id bigint(20) unsigned NOT NULL,
-	cf7_form_id bigint(20) unsigned NOT NULL DEFAULT 0,
 	iframe_src_template longtext NOT NULL,
 	created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY  (id),
@@ -135,5 +134,11 @@ class RTG_DB {
 		dbDelta( $sql_events );
 		dbDelta( $sql_form_revisions );
 		dbDelta( $sql_mapping_revisions );
+
+		// Drop the cf7_form_id column if it still exists from a previous version.
+		$row = $wpdb->get_row( "SHOW COLUMNS FROM {$mappings_table} LIKE 'cf7_form_id'" );
+		if ( $row ) {
+			$wpdb->query( "ALTER TABLE {$mappings_table} DROP COLUMN cf7_form_id" );
+		}
 	}
 }
